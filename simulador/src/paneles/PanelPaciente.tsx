@@ -184,9 +184,9 @@ export function PanelPaciente({ cliente, telefono: telefonoDemo, escribirEnWhats
             {ctx.citas_proximas?.length
               ? ctx.citas_proximas.map((c) => (
                   <div key={c.id} className="cita">
-                    {fechaHora(c.fecha_hora)} · {c.estudio} · {c.clinica} · <span className={`estado estado-${c.estado}`}>{c.estado === 'en_clinica' ? 'en clínica' : c.estado}</span>
+                    {fechaHora(c.fecha_hora)} · {c.estudio ?? c.folio ?? 'Cita'}{c.clinica && ` · ${c.clinica}`} · <span className={`estado estado-${c.estado}`}>{c.estado === 'en_clinica' ? 'en clínica' : c.estado}</span>
               {c.turno && <span className="turno">Turno {c.turno} · {c.area}</span>}
-                    {c.beneficiario.relacion !== 'titular' && <span className="tenue"> · para {c.beneficiario.nombre} ({RELACION[c.beneficiario.relacion]})</span>}
+                    {c.beneficiario && c.beneficiario.relacion !== 'titular' && <span className="tenue"> · para {c.beneficiario.nombre} ({RELACION[c.beneficiario.relacion]})</span>}
                     {['reservada', 'confirmada'].includes(c.estado) && (
                       <button className="chico secundario" style={{ marginLeft: 8 }} disabled={av.ocupado} onClick={() => {
                         if (!window.confirm(`¿Cancelar la cita de ${c.estudio}?${c.estado === 'confirmada' ? ' Ya está pagada: se marcará el reembolso.' : ''}`)) return

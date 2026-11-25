@@ -121,14 +121,14 @@ export function VistaContexto({ ctx, mostrarMensajes = true }: { ctx: Contexto; 
           {t.resumen && <Resumen texto={t.resumen} />}
         </div>
       ) : <p className="tenue">Sin trámite abierto.</p>}
-      {!!ctx.citas_proximas?.length && (
+      {!!ctx.citas_proximas?.length && !ctx.sesion.requiere_verificacion && (
         <div className="tarjeta">
           <b>Citas próximas</b>
           {ctx.citas_proximas.map((c) => (
             <div key={c.id} className="cita">
-              {fechaHora(c.fecha_hora)} · {c.estudio} · {c.clinica} · <span className={`estado estado-${c.estado}`}>{c.estado === 'en_clinica' ? 'en clínica' : c.estado}</span>
+              {fechaHora(c.fecha_hora)} · {c.estudio ?? c.folio ?? 'Cita'}{c.clinica && ` · ${c.clinica}`} · <span className={`estado estado-${c.estado}`}>{c.estado === 'en_clinica' ? 'en clínica' : c.estado}</span>
               {c.turno && <span className="turno">Turno {c.turno} · {c.area}</span>}
-              {c.beneficiario.relacion !== 'titular' && <span className="tenue"> · para {c.beneficiario.nombre} ({RELACION[c.beneficiario.relacion]})</span>}
+              {c.beneficiario && c.beneficiario.relacion !== 'titular' && <span className="tenue"> · para {c.beneficiario.nombre} ({RELACION[c.beneficiario.relacion]})</span>}
             </div>
           ))}
         </div>

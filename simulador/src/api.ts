@@ -291,7 +291,8 @@ export interface Contexto {
   tramites_abiertos: TramiteAbierto[]
   linea_tiempo?: Evento[]
   mensajes_recientes?: Mensaje[]
-  citas_proximas?: (CitaProxima & { folio?: string })[]
+  /** Sin verificar solo llegan id, folio, fecha_hora y estado (sin estudio, clínica ni beneficiario) */
+  citas_proximas?: (Pick<CitaProxima, 'id' | 'fecha_hora' | 'estado'> & Partial<CitaProxima> & { folio?: string })[]
   pagos_pendientes?: (PagoPendiente & { folio?: string })[]
 }
 
