@@ -126,7 +126,7 @@ const recorridoDeAna: Escenario = {
       () => whatsapp('1', /Paga aquí/))
     await paso(c, 'personal', '📞 Call center · Ana llama. La asesora la busca por su número…',
       () => atenderLlamadaConOtp(this.telefono))
-    await paso(c, 'personal', '📞 Call center · …le envía un OTP por SMS y Ana se lo dicta: identidad verificada.', validarOtpDictado)
+    await paso(c, 'personal', '📞 Call center · …le envía un código por WhatsApp y Ana se lo dicta: identidad verificada.', validarOtpDictado)
     await paso(c, 'personal', '📞 Call center · Ve el resumen y la línea de tiempo de todos los canales y toma el trámite (queda bloqueado para los demás).',
       () => clic('personal', 'Tomar', enRenglon('.tarjeta-tramite', folio)))
     await paso(c, 'personal', '📞 Call center · Revisa el pago pendiente con Ana y cuelga: el trámite se libera.', async () => {
