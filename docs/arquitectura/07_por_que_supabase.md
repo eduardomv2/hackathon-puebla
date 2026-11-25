@@ -55,7 +55,7 @@
 | Pieza usada | Qué resolvió |
 |---|---|
 | PostgreSQL 17 | Transacciones, restricciones, particiones, funciones en PL/pgSQL |
-| PostgREST | 56 funciones convertidas en endpoints sin escribir un servidor |
+| PostgREST | 57 funciones convertidas en endpoints sin escribir un servidor |
 | Auth + Send SMS Hook | OTP por WhatsApp (con SMS de respaldo) sin proveedor de SMS obligatorio |
 | Realtime Broadcast privado | Línea de tiempo en vivo con autorización por RLS |
 | `pgmq` + `pg_cron` + `pg_net` | Resúmenes, avisos, recordatorios y expiraciones dentro de la propia base |
@@ -72,7 +72,7 @@
 | Cumplimiento | No evaluado para datos clínicos reales (LFPDPPP, NOM-024) | Revisión formal antes de producción; hay opción de autoalojar |
 | Límites de Realtime y Edge Functions | Dependen del plan; arranque en frío | Medir con carga real; mantener los webhooks pequeños |
 | Región | El proyecto está en us-east-1 | Elegir región cercana a México al pasar a producción |
-| Lógica en SQL | Menos gente la domina que Node; depuración distinta | 392 pruebas pgTAP, migraciones versionadas, documentación (esta carpeta) |
+| Lógica en SQL | Menos gente la domina que Node; depuración distinta | 403 pruebas pgTAP, migraciones versionadas, documentación (esta carpeta) |
 | Acoplamiento a extensiones propias | `pgmq`, `pg_cron`, Vault, `realtime.send` | Están aisladas en pocas funciones (`despachar_worker`, `cola_*`, broadcast); se reemplazan sin tocar las reglas de negocio |
 
 **Estrategia de salida:** todo el negocio es SQL estándar más extensiones de uso común. Para migrar a RDS/Azure

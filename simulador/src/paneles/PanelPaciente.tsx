@@ -14,6 +14,7 @@ import { CamposNombre, type DatosNombre, faltaNombre, FormRegistro, NOMBRE_VACIO
 import {
   Avisos, describirEvento, dinero, fechaHora, Nivel, RELACION, Seccion, TarjetasTramites, useAvisos,
 } from '../ui/comunes'
+import { BotonComprobante } from '../ui/BotonComprobante'
 
 type Props = {
   cliente: Cliente
@@ -187,6 +188,7 @@ export function PanelPaciente({ cliente, telefono: telefonoDemo, escribirEnWhats
                     {fechaHora(c.fecha_hora)} · {c.estudio ?? c.folio ?? 'Cita'}{c.clinica && ` · ${c.clinica}`} · <span className={`estado estado-${c.estado}`}>{c.estado === 'en_clinica' ? 'en clínica' : c.estado}</span>
               {c.turno && <span className="turno">Turno {c.turno} · {c.area}</span>}
                     {c.beneficiario && c.beneficiario.relacion !== 'titular' && <span className="tenue"> · para {c.beneficiario.nombre} ({RELACION[c.beneficiario.relacion]})</span>}
+                    <span style={{ marginLeft: 8 }}><BotonComprobante cliente={cliente} interaccion={ctx.sesion.interaccion_id} citaId={c.id} av={av} /></span>
                     {['reservada', 'confirmada'].includes(c.estado) && (
                       <button className="chico secundario" style={{ marginLeft: 8 }} disabled={av.ocupado} onClick={() => {
                         if (!window.confirm(`¿Cancelar la cita de ${c.estudio}?${c.estado === 'confirmada' ? ' Ya está pagada: se marcará el reembolso.' : ''}`)) return

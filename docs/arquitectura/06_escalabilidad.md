@@ -99,4 +99,4 @@ flowchart LR
 - **Cada canal nuevo se agrega sin tocar la base:** basta con que llame a `api.*`. Voz con IA, una app nativa
   o un kiosco usan el mismo contrato.
 - **Las reglas viven una vez:** cambiar el límite de citas o el horario de una clínica se hace en un solo lugar.
-- **392 pruebas automáticas** permiten cambiar con confianza; cada cambio de base va en una migración nueva con su prueba.
+- **403 pruebas automáticas** permiten cambiar con confianza; cada cambio de base va en una migración nueva con su prueba.

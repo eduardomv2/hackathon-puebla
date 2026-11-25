@@ -60,6 +60,6 @@ flowchart TB
 ## 5.5 Riesgos conocidos y fuera de alcance
 
 - Cumplimiento formal (LFPDPPP, NOM-024 de expediente clínico, aviso de privacidad) **no está evaluado**.
-- No hay pruebas de penetración externas; la verificación es la suite pgTAP (392 pruebas) y revisión propia.
+- No hay pruebas de penetración externas; la verificación es la suite pgTAP (403 pruebas) y revisión propia.
 - Plan gratis de Supabase: sin respaldos con recuperación a un punto en el tiempo (PITR) y sin SLA.
 - El teléfono de pruebas de Meta solo envía a números registrados.

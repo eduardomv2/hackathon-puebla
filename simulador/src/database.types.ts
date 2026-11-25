@@ -52,6 +52,9 @@ export type Database = {
 "cola_leer":
 { Args: { "p_cantidad"?: number,"p_cola": string,"p_visibilidad_seg"?: number }; Returns: Json
                            },
+"comprobante_cita":
+{ Args: { "p_cita_id": string,"p_interaccion_id": string }; Returns: Json
+                           },
 "confirmar_pago":
 { Args: { "p_datos"?: Json,"p_estado": string,"p_referencia": string }; Returns: Json
                            },

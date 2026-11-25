@@ -43,9 +43,9 @@ flowchart LR
 
 | Elemento | Cantidad |
 |---|---|
-| Funciones de la API pública (`api.*`) | 56 |
-| Migraciones aplicadas | 37 |
-| Pruebas automáticas de base de datos (pgTAP) | 392 en 30 archivos |
+| Funciones de la API pública (`api.*`) | 57 |
+| Migraciones aplicadas | 38 |
+| Pruebas automáticas de base de datos (pgTAP) | 403 en 31 archivos |
 | Edge Functions (servidor) | 8 (webhook de WhatsApp, avisos, recordatorios, pagos, OTP, resúmenes, código de Auth, pago de prueba) |
 | Clínicas reales cargadas | 261, con horarios y zona horaria |
 | Roles | paciente, asesor, recepción, supervisor, admin (+ servicio interno) |
@@ -70,6 +70,6 @@ semanas en armar, sin perder la posibilidad de migrar (es PostgreSQL estándar).
 - WhatsApp usa el **número de prueba de Meta** (solo escribe a números registrados); para el público hay que
   registrar un número propio y aprobar plantillas.
 - No hay integración con el sistema clínico/resultados real de Salud Digna.
-- Pendiente: PDF de confirmación de pago y cita.
+- El comprobante PDF se genera en la app a partir de `api.comprobante_cita`.
 
 Detalle en [Estado y pendientes](09_estado_y_pendientes.md).

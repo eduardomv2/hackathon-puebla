@@ -14,7 +14,8 @@
 | Tiempo real, bandeja de atención, journey, métricas | Hecho |
 | Cifrado, bitácora, límites, particiones | Hecho |
 | Resumen para el asesor (Claude o plantilla) | Hecho (con `ANTHROPIC_API_KEY` usa Claude) |
-| Pruebas | 392 pruebas pgTAP en 30 archivos, todas pasan |
+| Pruebas | 403 pruebas pgTAP en 31 archivos, todas pasan |
+| Comprobante de pago y cita en PDF | `api.comprobante_cita` + PDF en el simulador (jsPDF) |
 | Guía para la app/PWA del paciente | `docs/GUIA_APP_PWA.md` |
 
 ## 9.2 Solo de demostración
@@ -29,7 +30,6 @@
 
 | Pendiente | Nota |
 |---|---|
-| **PDF de confirmación de pago y cita** | Lo dejó el equipo para después |
 | `git push` de los commits locales | Lo hace Eduardo (el agente no tiene credenciales) |
 | Entregar la clave de servicio al compañero (bot Node) | Por canal privado |
 | Pasarela de pagos real + `pagos-webhook` firmado | Hoy se usa `pago-demo` |
@@ -52,7 +52,7 @@
 ```bash
 # Base local y pruebas
 export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock   # solo con Podman
-npx supabase start && npx supabase db reset && npx supabase test db   # 392 pruebas
+npx supabase start && npx supabase db reset && npx supabase test db   # 403 pruebas
 
 # Simulador contra la nube / local
 cd simulador && npm run dev:prod    # nube

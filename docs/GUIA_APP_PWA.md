@@ -264,6 +264,23 @@ Pantalla de ejemplo: `simulador/src/paneles/PanelPaciente.tsx`.
   `details.canal` (`call_center` o `clinica`). La app debe **deshabilitar los botones** de ese trámite y mostrar
   "Te está atendiendo una persona…". `tramites_abiertos[i].en_atencion_de_otro` y `atencion_canal` lo anticipan.
 
+### 3.8b Comprobante de pago y cita (PDF)
+
+Los datos salen de una sola llamada; el PDF lo dibuja la app (no hay lógica de negocio en el PDF).
+
+```ts
+const { data: c } = await supabase.rpc('comprobante_cita', { p_interaccion_id, p_cita_id })
+// → { folio, emitido_en, titular, paciente: { nombre, relacion }, cita: { estado, fecha_hora, turno, precio },
+//     estudio: { nombre, preparacion, duracion_min, area }, clinica: { nombre, direccion, ciudad, estado, telefono, zona_horaria },
+//     pago: { referencia, estado, monto, moneda, pagado_en, metodo, en_caja, simulado } | null }
+```
+- Exige identidad **verificada** (`42501` si no). Otro paciente → `PT404`. Recepción solo de su clínica (`42501`).
+- `pago.estado` dice si es comprobante de pago (`pagado`) o solo de cita apartada (`pendiente`). `reembolsado` si se canceló.
+  `metodo`: `efectivo`, `tarjeta` (caja), `en_linea` o `en_linea_prueba` (pago de prueba).
+- Muestra las horas en `clinica.zona_horaria`.
+- Referencia lista para copiar: `simulador/src/pdf/comprobante.ts` (jsPDF, gratis, se carga solo al pedir el primer PDF)
+  y `simulador/src/ui/BotonComprobante.tsx`. En la PWA también sirve compartirlo con `navigator.share` y guardarlo sin conexión.
+
 ## 4. El contexto (`ctx`) según el nivel de verificación
 
 | Nivel | Se obtiene con | Qué trae `ctx` |
@@ -399,7 +416,6 @@ mientras atiende (canal Broadcast `paciente:<id>`, solo lo puede escuchar quien 
 ## 10. Lo que NO existe todavía
 
 - Pasarela de pago real (hay pago de prueba sin cargo). Cuando exista, cambia la Edge Function, no la app.
-- PDF de confirmación de pago y cita (pendiente).
 - SMS como respaldo del código de WhatsApp (falta cuenta del proveedor).
 - Recordatorio de cita (el día antes): solo existe el aviso de "trámite pendiente" a las 2 h sin actividad.
 - Resultados de estudios (el bot da un enlace, no hay API de resultados).
@@ -420,6 +436,8 @@ mientras atiende (canal Broadcast `paciente:<id>`, solo lo puede escuchar quien 
     aparece en el chat y viceversa, **sin recargar** la app (tiempo real).
 11. Que el personal tome el trámite desde `/personal` → la app deshabilita los botones (`PT423`).
 12. Probar sin red, con sesión vencida y con sesión huérfana.
+
+17. Paciente verificado: en «Mis citas» descarga el comprobante PDF (pagada: «PAGADO»; apartada: «PENDIENTE DE PAGO»).
 
 **Personal**
 13. Cada cuenta ve solo sus pestañas. Recepción con clínica Puebla: cita de otra clínica → aviso, sin botón de cobro.

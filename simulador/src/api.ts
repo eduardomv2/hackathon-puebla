@@ -739,3 +739,22 @@ export const pagosPendientes = (c: Cliente, interaccion: string) =>
 export const pagarDemo = (c: Cliente, interaccion: string, referencia: string) =>
   invocar<{ estado: string; repetido?: boolean }>(c, 'pago-demo', { interaccion_id: interaccion, referencia })
 
+
+/** Todo lo que lleva el comprobante de pago y cita (api.comprobante_cita). Exige identidad verificada. */
+export interface Comprobante {
+  folio: string | null
+  emitido_en: string
+  cita: { id: string; estado: string; fecha_hora: string; turno: string | null; precio: number }
+  titular: string | null
+  paciente: { nombre: string | null; relacion: string } | null
+  estudio: { nombre: string; preparacion: string | null; duracion_min: number | null; area: string | null }
+  clinica: { nombre: string; direccion: string | null; ciudad: string; estado: string; telefono: string | null; zona_horaria: string }
+  pago: {
+    referencia: string; estado: 'pendiente' | 'pagado' | 'fallido' | 'expirado' | 'reembolsado'; monto: number; moneda: string
+    pagado_en: string | null; metodo: string | null; en_caja: boolean; simulado: boolean
+  } | null
+}
+
+/** Datos del comprobante de una cita del paciente de esta sesión (paciente o personal con identidad verificada). */
+export const comprobanteCita = (c: Cliente, interaccion: string, cita: string) =>
+  llamar<'comprobante_cita', Comprobante>(c, 'comprobante_cita', { p_interaccion_id: interaccion, p_cita_id: cita })

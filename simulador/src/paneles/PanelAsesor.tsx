@@ -14,6 +14,7 @@ import { faltaNombre, FormRegistro } from '../ui/Registro'
 import {
   describirEvento, dia, dinero, fechaHora, hora, RELACION, Seccion, TarjetasTramites, VistaContexto, type Avisador,
 } from '../ui/comunes'
+import { BotonComprobante } from '../ui/BotonComprobante'
 
 type Personal = { email: string; rol: string | null; clinica_id: string | null }
 
@@ -245,6 +246,7 @@ function AccionesCita({ cliente, int, cita: c, av, mostrador, alTerminar }: {
             })}>Cobrar en caja{c.precio != null && ` ${dinero(c.precio)}`}</button>
           </>
         )}
+        {c.clinica_id && <BotonComprobante cliente={cliente} interaccion={int} citaId={c.id} av={av} />}
         {editable && (
           <button className="chico secundario" disabled={av.ocupado} onClick={() => {
             if (!window.confirm(`¿Cancelar la cita ${c.folio ?? ''} de ${c.estudio}?${c.pagada ? ' Ya está pagada: se marcará el reembolso.' : ''}`)) return
