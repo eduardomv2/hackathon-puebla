@@ -6,7 +6,7 @@
 // El trámite que recepción atiende queda bloqueado para los demás canales (el personal manda).
 import { useEffect, useState } from 'react'
 import {
-  agendaClinica, directorioClinicas, marcarAtendida, registrarLlegada, TIPOS_DOCUMENTO,
+  agendaClinica, cobrarEnCaja, directorioClinicas, marcarAtendida, registrarLlegada, TIPOS_DOCUMENTO,
   type CitaAgenda, type Cliente, type Clinica, type Llegada, type TipoDocumento,
 } from '../api'
 import { dinero, hora, hoyLocal, Seccion, type Avisador } from '../ui/comunes'
@@ -81,6 +81,13 @@ function Llegadas({ cliente, av, clinicaFija }: { cliente: Cliente; av: Avisador
               <span className={c.pagada ? 'estado estado-confirmada' : 'estado estado-reservada'}>{c.pagada ? 'pagada' : 'pago pendiente'}</span>
               {esHoy && ['reservada', 'confirmada'].includes(c.estado) && abierta !== c.cita_id && (
                 <button className="chico" onClick={() => setAbierta(c.cita_id)}>Registrar llegada</button>
+              )}
+              {!c.pagada && ['reservada', 'en_clinica'].includes(c.estado) && (
+                <button className="chico secundario" disabled={av.ocupado} onClick={async () => {
+                  const tarjeta = window.confirm(`Cobrar en caja a ${c.paciente} (${c.estudio}).\n\nAceptar = tarjeta · Cancelar = efectivo`)
+                  const r = await av.accion(() => cobrarEnCaja(cliente, c.cita_id, tarjeta ? 'tarjeta' : 'efectivo'))
+                  if (r) { av.ok(`Cobrado en caja: ${dinero(r.monto)} en ${r.metodo}.`); await cargar() }
+                }}>Cobrar en caja</button>
               )}
               {c.estado === 'en_clinica' && (
                 <button className="chico" disabled={av.ocupado} onClick={async () => {

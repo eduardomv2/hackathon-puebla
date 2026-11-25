@@ -43,6 +43,9 @@ export type Database = {
 "clinicas_para_estudio":
 { Args: { "p_busqueda"?: string,"p_ciudad"?: string,"p_estado"?: string,"p_estudio_id": string,"p_lat"?: number,"p_limite"?: number,"p_lng"?: number }; Returns: Json
                            },
+"cobrar_en_caja":
+{ Args: { "p_cita_id": string,"p_metodo"?: string }; Returns: Json
+                           },
 "cola_confirmar":
 { Args: { "p_cola": string,"p_msg_id": number }; Returns: boolean
                            },

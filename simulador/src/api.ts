@@ -563,6 +563,11 @@ export const registrarLlegada = (c: Cliente, cita: string, tipo: TipoDocumento, 
 export const marcarAtendida = (c: Cliente, cita: string) =>
   llamar<'marcar_atendida', { cita_id: string; estado: string }>(c, 'marcar_atendida', { p_cita_id: cita })
 
+/** Recepción: cobrar en caja una cita apartada sin pagar (usa el link pendiente o crea un pago de caja). */
+export const cobrarEnCaja = (c: Cliente, cita: string, metodo: 'efectivo' | 'tarjeta') =>
+  llamar<'cobrar_en_caja', { pago_id: string; estado: string; monto: number; metodo: string; folio: string | null }>(
+    c, 'cobrar_en_caja', { p_cita_id: cita, p_metodo: metodo })
+
 /** Paciente: cancelar una cita (si ya pagó, el pago queda como reembolsado). */
 export const cancelarCita = (c: Cliente, interaccion: string, cita: string, motivo?: string) =>
   llamar<'cancelar_cita', { cita_id: string; estado: string; reembolso: boolean; folio: string }>(

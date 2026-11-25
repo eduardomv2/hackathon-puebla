@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import {
   agregarBeneficiario, avanzarTramite, catalogoEstudios, clinicasParaEstudio, generarPago, horariosDisponibles,
   iniciarTramite, misBeneficiarios, obtenerContexto, pagarSimulado, referenciaDeLink, reservarCita, retomarTramite,
-  ubicacionesClinicas, enNube, pagarDemo, pagosPendientes,
+  ubicacionesClinicas, enNube, pagarDemo, pagosPendientes, cobrarEnCaja,
   type Beneficiario, type Cliente, type Clinica, type Contexto, type Estudio, type Horario, type Pago, type Relacion,
   type Ubicacion,
 } from '../api'
@@ -340,6 +340,8 @@ function PasoPago({ cliente, ctx, av, hacer, telefonoAviso }: PasoProps & { tele
   const link = pago?.link_pago ?? pendiente?.link_pago ?? null
   const generado = Boolean(pago || pendiente)
   const esPaciente = ctx.sesion.canal === 'web' || ctx.sesion.canal === 'app'
+  const enCaja = ctx.sesion.canal === 'clinica'
+  const [metodo, setMetodo] = useState<'efectivo' | 'tarjeta'>('efectivo')
   // Nube: sin pasarela, el paciente paga con el pago de prueba (pago-demo); el personal no paga por él
   const pagarEnNube = async () => {
     const ref = pago?.referencia ?? (await pagosPendientes(cliente, int)).find((p) => p.tramite_id === t.id)?.referencia
@@ -363,10 +365,23 @@ function PasoPago({ cliente, ctx, av, hacer, telefonoAviso }: PasoProps & { tele
             {enNube && esPaciente && (
               <button disabled={av.ocupado} onClick={() => hacer(pagarEnNube)}>Pagar (prueba, sin cargo)</button>
             )}
-            {enNube && !esPaciente && (
+            {enNube && !esPaciente && !enCaja && (
               <p className="tenue">El paciente paga desde su app o por WhatsApp (respondiendo PAGAR).</p>
             )}
           </>}
+      {enCaja && t.contexto.cita_id && (
+        <div className="fila">
+          <span>Cobrar en caja:</span>
+          <select value={metodo} onChange={(e) => setMetodo(e.target.value as 'efectivo' | 'tarjeta')}>
+            <option value="efectivo">efectivo</option>
+            <option value="tarjeta">tarjeta</option>
+          </select>
+          <button disabled={av.ocupado} onClick={() => hacer(async () => {
+            const r = await cobrarEnCaja(cliente, t.contexto.cita_id!, metodo)
+            av.ok(`Cobrado en caja: ${dinero(r.monto)} en ${r.metodo}. La cita quedó confirmada.`)
+          })}>Cobrar {dinero(t.contexto.precio)}</button>
+        </div>
+      )}
       <button className="secundario" disabled={av.ocupado} onClick={() => hacer(() => avanzarTramite(cliente, int, t, 'seleccion_horario'))}>← Cambiar horario</button>
     </div>
   )
