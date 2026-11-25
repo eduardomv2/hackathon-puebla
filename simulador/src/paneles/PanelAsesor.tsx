@@ -5,9 +5,9 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   cancelarCita, cerrarInteraccion, cobrarEnCaja, enviarOtp, horariosDisponibles, reprogramarCita, iniciarContacto,
-  iniciarSesionPersonal, obtenerContexto, retomarTramite, solicitudesAgente, suscribirPaciente, TIPOS_DOCUMENTO, validarOtp,
+  iniciarSesionPersonal, obtenerContexto, retomarTramite, suscribirPaciente, TIPOS_DOCUMENTO, validarOtp,
   verificarIdentidad, verificarIdentificacion,
-  type Cliente, type Contexto, type Horario, type SolicitudAgente, type TipoDocumento,
+  type Cliente, type Contexto, type Horario, type TipoDocumento,
 } from '../api'
 import { AsistenteTramite, NuevoTramite } from '../ui/Tramite'
 import { faltaNombre, FormRegistro } from '../ui/Registro'
@@ -85,7 +85,6 @@ export function Atencion({ cliente, telefono, av, canal = 'call_center' }: {
   const whatsapp = (ctx?.mensajes_recientes ?? []).filter((m) => m.canal === 'whatsapp').slice(-6)
   return (
     <>
-      {!mostrador && <SolicitudesAgente cliente={cliente} />}
       <Seccion titulo={mostrador ? 'Mostrador: buscar por celular' : 'Atender llamada'} extra={ctx && <span className={`vivo ${enVivo === 'SUBSCRIBED' ? 'on' : ''}`}>● en vivo</span>}>
         <div className="fila">
           <input value={tel} onChange={(e) => setTel(e.target.value)} placeholder="Teléfono" />
@@ -197,28 +196,6 @@ export function Atencion({ cliente, telefono, av, canal = 'call_center' }: {
         </>
       )}
     </>
-  )
-}
-
-/** Pacientes que pidieron hablar con una persona (por cualquier canal) y aún nadie atiende. */
-function SolicitudesAgente({ cliente }: { cliente: Cliente }) {
-  const [lista, setLista] = useState<SolicitudAgente[]>([])
-  useEffect(() => {
-    let vivo = true
-    const cargar = () => solicitudesAgente(cliente).then((l) => { if (vivo) setLista(l) }).catch(() => {})
-    void cargar()
-    const t = setInterval(cargar, 10000)
-    return () => { vivo = false; clearInterval(t) }
-  }, [cliente])
-  if (!lista.length) return null
-  return (
-    <Seccion titulo={`Piden hablar con una persona (${lista.length})`}>
-      {lista.map((x) => (
-        <div key={`${x.paciente_id}${x.momento}`} className="aviso aviso-aviso">
-          <span><b>{x.paciente}</b> · {x.canal}{x.folio && ` · ${x.folio}`} · {fechaHora(x.momento)}{x.motivo && <span className="tenue"> · {x.motivo}</span>}</span>
-        </div>
-      ))}
-    </Seccion>
   )
 }
 

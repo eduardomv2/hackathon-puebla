@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   asegurarSesionAnonima, cancelarCita, catalogoEstudios, confirmarOtpTelefono, guardarDatosPaciente, iniciarSesionPaciente, nuevaSesionAnonima,
-  obtenerContexto, pedirOtpTelefono, registrarConsentimientoAvisos, retomarTramite, solicitarAgente, suscribirPaciente,
+  obtenerContexto, pedirOtpTelefono, registrarConsentimientoAvisos, retomarTramite, suscribirPaciente,
   type Cliente, type Contexto, type Estudio, type ModoOtp,
 } from '../api'
 import { AsistenteTramite, NuevoTramite } from '../ui/Tramite'
@@ -199,12 +199,6 @@ export function PanelPaciente({ cliente, telefono: telefonoDemo, escribirEnWhats
                     )}
                   </div>))
               : <p className="tenue">Sin citas próximas.</p>}
-            <div className="fila">
-              <button className="chico secundario" disabled={av.ocupado} onClick={() => av.accion(async () => {
-                const r = await solicitarAgente(cliente, ctx.sesion.interaccion_id, 'desde la web')
-                av.ok(r.mensaje)
-              })}>Hablar con una persona</button>
-            </div>
           </Seccion>
         </>
       )}
