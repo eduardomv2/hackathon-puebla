@@ -1,0 +1,152 @@
+:root {
+  --fondo: #f4f5f7; --panel: #fff; --borde: #dfe2e6; --texto: #1f2328; --tenue: #6b7280;
+  --acento: #0a7c66; --acento-claro: #e3f4ef; --aviso: #fff6dd; --aviso-borde: #e6c35c;
+  --error: #fde8e8; --error-borde: #e57373; --ok: #e3f4ef; --info: #e8f0fe;
+  font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--texto); background: var(--fondo);
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+h1 { font-size: 15px; margin: 0; }
+h2 { font-size: 14px; margin: 0; }
+h3 { font-size: 12px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: .04em; color: var(--tenue); display: flex; justify-content: space-between; align-items: center; }
+h4 { font-size: 13px; margin: 8px 0 4px; }
+p { margin: 4px 0; }
+
+.barra { display: flex; gap: 16px; align-items: center; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--borde); position: sticky; top: 0; z-index: 2; }
+.columnas { display: grid; grid-template-columns: repeat(4, minmax(300px, 1fr)); gap: 8px; padding: 8px; height: calc(100vh - 46px); }
+.panel { background: var(--panel); border: 1px solid var(--borde); border-radius: 8px; padding: 10px; overflow-y: auto; }
+.panel > header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.seccion { border-top: 1px solid var(--borde); padding: 8px 0; }
+
+input, select, button { font: inherit; padding: 5px 8px; border: 1px solid var(--borde); border-radius: 6px; background: #fff; }
+input { min-width: 0; flex: 1; }
+button { background: var(--acento); color: #fff; border-color: var(--acento); cursor: pointer; }
+button:disabled { opacity: .5; cursor: wait; }
+button.secundario { background: #fff; color: var(--acento); }
+button.chico { padding: 2px 8px; font-size: 12px; }
+button.cerrar { background: none; border: 0; color: inherit; font-size: 16px; padding: 0 4px; }
+.opcion-boton { display: block; width: 100%; text-align: left; background: #fff; color: var(--texto); margin: 4px 0; }
+.opcion-boton:hover { border-color: var(--acento); background: var(--acento-claro); }
+.hora-boton { background: #fff; color: var(--acento); padding: 2px 7px; }
+.hora-boton:hover { background: var(--acento-claro); }
+
+.fila { display: flex; gap: 6px; align-items: center; margin: 4px 0; flex-wrap: wrap; }
+.form { display: flex; flex-direction: column; gap: 4px; padding: 6px; background: var(--fondo); border-radius: 6px; margin: 4px 0; }
+.opcion { display: flex; gap: 6px; align-items: center; margin: 2px 0; cursor: pointer; }
+.lista { max-height: 160px; overflow-y: auto; margin: 4px 0; }
+.dia { margin: 6px 0; }
+.horas { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.tenue { color: var(--tenue); font-size: 12px; }
+.extra { text-transform: none; letter-spacing: 0; font-weight: normal; }
+.interruptor button { background: #fff; color: var(--acento); border-radius: 0; }
+.interruptor button:first-child { border-radius: 6px 0 0 6px; }
+.interruptor button:last-child { border-radius: 0 6px 6px 0; }
+.interruptor button.activo { background: var(--acento); color: #fff; }
+.codigo { font-family: ui-monospace, monospace; font-size: 16px; letter-spacing: .1em; }
+.link { font-family: ui-monospace, monospace; font-size: 11px; word-break: break-all; }
+
+.avisos { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.aviso { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; padding: 6px 8px; border-radius: 6px; border: 1px solid; }
+.aviso-aviso { background: var(--aviso); border-color: var(--aviso-borde); }
+.aviso-error { background: var(--error); border-color: var(--error-borde); }
+.aviso-ok { background: var(--ok); border-color: var(--acento); }
+.aviso-info { background: var(--info); border-color: #8ab4f8; }
+
+.nivel { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: #eee; text-transform: uppercase; font-weight: 600; }
+.nivel-declarada { background: #fde8e8; color: #9b1c1c; }
+.nivel-canal { background: #fff6dd; color: #8a6100; }
+.nivel-verificada { background: #e3f4ef; color: #0a7c66; }
+.estado { font-size: 11px; padding: 0 6px; border-radius: 8px; background: #eee; }
+.estado-confirmada { background: #e3f4ef; color: #0a7c66; }
+.estado-reservada { background: #fff6dd; color: #8a6100; }
+.estado-cancelada { background: #fde8e8; color: #9b1c1c; }
+.tarjeta { background: var(--fondo); border-radius: 6px; padding: 6px 8px; margin: 6px 0; }
+.tarjeta summary { cursor: pointer; font-weight: 600; }
+.resumen { background: var(--info); border-radius: 6px; padding: 4px 6px; }
+.insignia { margin-left: 6px; font-size: 11px; padding: 0 6px; border-radius: 8px; background: #fff; border: 1px solid #ccc; }
+.insignia.ia { border-color: #7a4cc2; color: #7a4cc2; }
+.insignia.plantilla { border-color: #888; color: #555; }
+.cita { margin: 3px 0; }
+.msg-in { color: var(--texto); } .msg-out { color: var(--acento); }
+
+.linea-tiempo { list-style: none; padding: 0; margin: 4px 0; }
+.linea-tiempo li { padding: 2px 0; border-bottom: 1px dashed var(--borde); font-size: 12px; }
+.linea-tiempo .hora { color: var(--tenue); margin-right: 6px; font-variant-numeric: tabular-nums; }
+.canal { font-size: 10px; padding: 0 5px; border-radius: 6px; margin-right: 6px; background: #eee; }
+.canal-web { background: #e8f0fe; } .canal-app { background: #ede7f6; } .canal-whatsapp { background: #dcf8c6; }
+.canal-call_center { background: #fff3e0; } .canal-clinica { background: #fce4ec; } .canal-sistema { background: #eceff1; }
+
+.chat { background: #efeae2; border-radius: 6px; padding: 6px; height: 330px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.burbuja { max-width: 85%; padding: 5px 8px; border-radius: 8px; white-space: pre-wrap; position: relative; }
+.burbuja.yo { align-self: flex-end; background: #d9fdd3; }
+.burbuja.bot { align-self: flex-start; background: #fff; }
+.burbuja .hora { display: block; text-align: right; font-size: 10px; color: var(--tenue); }
+.bandeja { padding: 5px 0; border-bottom: 1px dashed var(--borde); display: flex; gap: 6px; flex-wrap: wrap; align-items: baseline; }
+.bandeja .hora { color: var(--tenue); font-size: 11px; }
+.bandeja-otp b { color: #8a6100; }
+
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+td { padding: 4px; border-bottom: 1px solid var(--borde); vertical-align: top; }
+table.seleccionable tr { cursor: pointer; }
+table.seleccionable tr:hover, tr.sel { background: var(--acento-claro); }
+.vivo { font-size: 11px; color: var(--tenue); } .vivo.on { color: #d32f2f; }
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 6px 0; }
+.kpi { background: var(--fondo); border-radius: 6px; padding: 6px; display: flex; flex-direction: column; }
+.kpi b { font-size: 16px; }
+.sube { color: #0a7c66; font-weight: 600; } .baja { color: #d32f2f; font-weight: 600; }
+
+.nota-bloqueo { background: var(--aviso); border: 1px solid var(--aviso-borde); border-radius: 6px; padding: 8px; }
+.tarjetas { display: flex; flex-direction: column; gap: 6px; }
+.tarjeta-tramite { border: 1px solid var(--borde); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; }
+.tarjeta-tramite.activa { border-color: var(--acento); background: var(--acento-claro); }
+.tarjeta-tramite.bloqueada { border-color: var(--aviso-borde); }
+.tarjeta-tramite .persona { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--acento); font-weight: 700; }
+.tarjeta-tramite button { align-self: flex-start; }
+.candado { color: #8a6100; font-size: 12px; } .atiendo { color: var(--acento); font-size: 12px; }
+
+/* Recepción */
+.agenda { display: flex; flex-direction: column; gap: 6px; }
+.cita-agenda { border: 1px solid var(--borde, #ddd); border-radius: 6px; padding: 6px 8px; }
+.cita-agenda.estado-en_clinica { border-color: #0b7a5f; background: #f1faf6; }
+.turno { font-weight: 700; color: #0b5f7a; margin-left: 4px; }
+.estado-en_clinica { background: #d9f2e8; color: #0b7a5f; }
+.llegada { display: flex; gap: 12px; align-items: center; margin-top: 6px; padding: 8px; border-radius: 6px; background: #e8f6ef; }
+.llegada.caja { background: #fff4e0; }
+.turno-grande { font-size: 28px; font-weight: 800; letter-spacing: 1px; }
+
+/* Supervisión */
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.chip { background: #f3f4f6; color: #333; border: 1px solid #ddd; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+.chip.con { border-color: #c2410c; }
+.chip.con b { color: #c2410c; }
+.chip.activo { background: #0b7a5f; color: #fff; border-color: #0b7a5f; }
+.chip.activo b { color: #fff; }
+.lista-bandeja { display: flex; flex-direction: column; gap: 4px; }
+.item-bandeja { border: 1px solid #e5e7eb; border-left-width: 4px; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 13px; }
+.item-bandeja:hover { background: #f9fafb; }
+.item-bandeja.cat-atorados { border-left-color: #d97706; }
+.item-bandeja.cat-pago_por_vencer { border-left-color: #dc2626; }
+.item-bandeja.cat-en_atencion { border-left-color: #2563eb; }
+.item-bandeja.cat-seguridad { border-left-color: #7c3aed; }
+.item-bandeja.cat-llegadas_hoy { border-left-color: #0b7a5f; }
+.derecha { margin-left: auto; }
+
+/* Sitio (rutas / y /personal) */
+.sitio { min-height: 100vh; display: flex; flex-direction: column; }
+.sitio-cuerpo { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 12px; }
+.sitio-personal .sitio-cuerpo { max-width: 1100px; }
+.pie { display: flex; justify-content: space-between; gap: 12px; padding: 10px 16px; border-top: 1px solid #e5e7eb; font-size: 12px; }
+.pie a { color: #6b7280; text-decoration: none; }
+.pie a:hover { text-decoration: underline; }
+.cargando { padding: 24px; color: #6b7280; }
+
+/* Demo */
+.escenarios { display: flex; flex-wrap: wrap; gap: 4px; }
+.escenarios button { font-size: 12px; padding: 4px 8px; }
+.escenarios button.activo { background: #c2410c; }
+.narracion { margin: 6px 12px 0; padding: 8px 12px; border-radius: 8px; background: #ecfdf5; border: 1px solid #a7f3d0; font-size: 15px; }
+.narracion.error { background: #fef2f2; border-color: #fecaca; }
+.narracion details { margin-top: 4px; font-size: 12px; }
+.historial { margin: 4px 0 0 18px; padding: 0; color: #4b5563; }
+.panel.demo-activo { outline: 3px solid #f59e0b; outline-offset: -3px; box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.15); transition: outline-color .3s; }

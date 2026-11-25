@@ -1,0 +1,110 @@
+-- =====================================================================
+-- Utilidades para las pruebas pgTAP (se incluyen con \ir ../helpers.psql).
+-- Extensión .psql para que pg_prove no la corra como prueba.
+-- Se crean DENTRO de la transacción de cada archivo: el rollback final
+-- borra el esquema tests y todos los datos de prueba.
+-- =====================================================================
+create schema tests;
+grant usage on schema tests to anon, authenticated, service_role;
+
+-- Cambia rol de base de datos + JWT para lo que sigue de la transacción.
+-- Igual que PostgREST: el rol decide los privilegios, el JWT decide qué
+-- autoriza cada función api (core.rol_actual).
+create function tests.como(p_rol text, p_claims jsonb) returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims', coalesce(p_claims::text, ''), true);
+  if p_rol = 'postgres' then
+    reset role;
+  else
+    execute format('set local role %I', p_rol);
+  end if;
+end $$;
+
+create function tests.como_postgres() returns void language sql as $$ select tests.como('postgres', null) $$;
+create function tests.como_anon() returns void language sql as $$ select tests.como('anon', '{"role":"anon"}') $$;
+create function tests.como_servicio() returns void language sql as $$
+  select tests.como('service_role', '{"role":"service_role"}') $$;
+create function tests.como_paciente(p_uid uuid, p_anonimo boolean default true) returns void language sql as $$
+  select tests.como('authenticated', jsonb_build_object('role', 'authenticated', 'sub', p_uid, 'is_anonymous', p_anonimo)) $$;
+create function tests.como_staff(p_uid uuid, p_rol text, p_clinica uuid default null) returns void language sql as $$
+  select tests.como('authenticated', jsonb_build_object('role', 'authenticated', 'sub', p_uid,
+                    'app_metadata', jsonb_build_object('rol', p_rol, 'clinica_id', p_clinica))) $$;
+
+-- Usuarios de Supabase Auth y personal (solo como postgres)
+create function tests.crear_usuario(p_uid uuid, p_anonimo boolean default true, p_telefono text default null,
+                                    p_email text default null) returns uuid language sql as $$
+  insert into auth.users (id, aud, role, is_anonymous, phone, phone_confirmed_at, email, email_confirmed_at)
+  values (p_uid, 'authenticated', 'authenticated', p_anonimo,
+          p_telefono, case when p_telefono is not null then now() end,
+          p_email, case when p_email is not null then now() end)
+  returning id $$;
+
+create function tests.crear_staff(p_uid uuid, p_rol text, p_clinica uuid default null) returns uuid language sql as $$
+  select tests.crear_usuario(p_uid, false);
+  insert into core.staff (id, nombre, email, rol, clinica_id)
+  values (p_uid, 'Personal ' || p_rol, p_uid || '@salud.test', p_rol, p_clinica)
+  returning id $$;
+
+-- Catálogo (security definer: se usan también desde roles sin acceso a core)
+create function tests.estudio(p_clave text) returns uuid language sql stable security definer set search_path = '' as $$
+  select id from core.estudios where clave = p_clave $$;
+create function tests.clinica(p_clave text) returns uuid language sql stable security definer set search_path = '' as $$
+  select id from core.clinicas where clave = p_clave $$;
+
+-- Un turno válido dentro de N días: 10:00 hora de México (las clínicas demo
+-- atienden lunes a sábado de 7:00 a 12:00 como mínimo). Si cae en domingo, el lunes.
+create function tests.en_dias(p_dias int) returns timestamptz language sql stable as $$
+  select ((d + case when extract(dow from d) = 0 then 1 else 0 end) + time '10:00') at time zone 'America/Mexico_City'
+  from (select (now() at time zone 'America/Mexico_City')::date + p_dias as d) x $$;
+
+-- Lleva el trámite hasta seleccion_horario. Devuelve la versión nueva.
+create function tests.hasta_horario(p_int uuid, p_tramite uuid, p_version int, p_estudio text default 'BH',
+                                    p_clinica text default 'PUE-CEN', p_beneficiario uuid default null)
+returns int language plpgsql as $$
+declare
+  v int;
+begin
+  v := (api.avanzar_tramite(p_int, p_tramite, p_version, 'seleccion_clinica',
+          jsonb_strip_nulls(jsonb_build_object('estudio_id', tests.estudio(p_estudio), 'beneficiario_id', p_beneficiario)))
+        ->> 'version')::int;
+  return (api.avanzar_tramite(p_int, p_tramite, v, 'seleccion_horario',
+            jsonb_build_object('clinica_id', tests.clinica(p_clinica))) ->> 'version')::int;
+end $$;
+
+-- Genera el link de pago con la sesión actual y simula el webhook del
+-- proveedor (service_role). Regresa al rol y JWT que había.
+create function tests.pagar(p_int uuid, p_tramite uuid, p_version int) returns jsonb language plpgsql as $$
+declare
+  v_rol    text := current_user;
+  v_claims text := current_setting('request.jwt.claims', true);
+  v_pago   jsonb;
+begin
+  v_pago := api.generar_pago(p_int, p_tramite, p_version);
+  perform tests.como_servicio();
+  perform api.confirmar_pago(split_part(v_pago ->> 'link_pago', '/checkout/', 2), 'pagado');
+  perform tests.como(v_rol, nullif(v_claims, '')::jsonb);
+  return v_pago;
+end $$;
+
+-- Ejecuta un SQL que debe fallar y devuelve {code, message, detail} (detail como jsonb si lo es)
+create function tests.error_de(p_sql text) returns jsonb language plpgsql as $$
+declare
+  v_code text; v_msg text; v_det text;
+begin
+  execute p_sql;
+  return jsonb_build_object('code', null);
+exception when others then
+  get stacked diagnostics v_code = returned_sqlstate, v_msg = message_text, v_det = pg_exception_detail;
+  return jsonb_build_object('code', v_code, 'message', v_msg,
+                            'detail', case when v_det like '{%' then v_det::jsonb else to_jsonb(v_det) end);
+end $$;
+
+-- Simula que la paciente verificó su teléfono con el OTP de Supabase Auth
+create function tests.verificar_telefono_auth(p_uid uuid, p_telefono text) returns void language sql as $$
+  update auth.users set phone = p_telefono, phone_confirmed_at = now(), is_anonymous = false where id = p_uid $$;
+
+-- Registro mínimo del titular (nombre + apellido paterno) para poder iniciar trámites
+create function tests.registrar(p_interaccion uuid, p_nombre text default 'Ana', p_apellido text default 'Prueba')
+returns void language sql as $$
+  select api.guardar_datos_paciente(p_interaccion, p_nombre, p_apellido) is not null $$;
+grant execute on function tests.registrar(uuid, text, text) to anon, authenticated, service_role;

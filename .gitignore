@@ -1,0 +1,22 @@
+# Dependencias y builds
+node_modules/
+dist/
+dist-ssr/
+
+# Secretos y configuración local: se suben solo los .env.example
+.env
+.env.*
+!.env.example
+*.local
+
+# Supabase CLI (temporales y secretos de la instancia local)
+supabase/.temp/
+supabase/.branches/
+
+# Editor / sistema
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.log
+*.sw?

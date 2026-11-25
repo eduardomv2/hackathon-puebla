@@ -1,0 +1,32 @@
+{
+  "name": "simulador",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "tipos": "cd .. && npx supabase gen types typescript --local --schema api < /dev/null > simulador/src/database.types.ts",
+    "usuarios": "tsx scripts/crear-usuarios.ts",
+    "probar-api": "tsx scripts/probar-api.ts",
+    "probar-bot": "tsx --test ../supabase/functions/whatsapp-webhook/interpretar.test.ts ../supabase/functions/whatsapp-webhook/fechas.test.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "oxlint": "^1.90.0",
+    "postgres": "^4.1.1",
+    "tsx": "^4.23.15",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.6"
+  }
+}
