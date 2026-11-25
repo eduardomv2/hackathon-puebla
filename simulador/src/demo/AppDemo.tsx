@@ -2,7 +2,7 @@
 // narrados para el jurado. La supervisión queda visible todo el tiempo y entra sola como admin.
 import { useEffect, useRef, useState } from 'react'
 import { navegar } from '../App'
-import { crearCliente, nuevaSesionAnonima, reiniciarDemo } from '../api'
+import { crearCliente, enNube, nuevaSesionAnonima, reiniciarDemo } from '../api'
 import { ConsolaPersonal } from '../paneles/ConsolaPersonal'
 import { PanelPaciente } from '../paneles/PanelPaciente'
 import { PanelTelefono } from '../paneles/PanelTelefono'
@@ -25,7 +25,23 @@ const TELEFONOS_PRUEBA = ['528661234567', '528661234568', '528661234569', '52866
 
 type Narracion = { panel: IdPanel | null; texto: string; error?: boolean }
 
+/** En modo nube /demo no existe: mezclaría la base en línea con el teléfono simulado (solo local). */
 export default function AppDemo() {
+  if (enNube) {
+    return (
+      <div className="sitio"><main className="sitio-cuerpo">
+        <div className="panel">
+          <h2>/demo solo existe en local</h2>
+          <p>El demo usa el teléfono simulado y reinicia datos de prueba: no se mezcla con la base en línea.</p>
+          <p className="tenue">Para usarlo: <code>npm run dev</code> (Supabase local). En la nube usa <a href="/">el sitio</a> o <a href="/personal">/personal</a>.</p>
+        </div>
+      </main></div>
+    )
+  }
+  return <AppDemoLocal />
+}
+
+function AppDemoLocal() {
   const [telefono, setTelefono] = useState(TELEFONOS_PRUEBA[0])
   const [borradorWhatsApp, setBorradorWhatsApp] = useState('')
   const [version, setVersion] = useState(0)          // remonta los paneles tras reiniciar

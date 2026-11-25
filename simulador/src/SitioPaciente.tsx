@@ -3,7 +3,7 @@
 // (Send SMS Hook → enviar-codigo-auth) y lo que el bot o el sistema le mandan.
 import { useState } from 'react'
 import { navegar } from './App'
-import { crearCliente } from './api'
+import { crearCliente, enNube } from './api'
 import { PanelPaciente } from './paneles/PanelPaciente'
 import { PanelTelefono } from './paneles/PanelTelefono'
 
@@ -15,7 +15,7 @@ const clienteTelefono = crearCliente(URL, CLAVE, 'sitio-telefono')
 export function SitioPaciente() {
   const [celular, setCelular] = useState('')
   const [borrador, setBorrador] = useState('')
-  const conTelefono = /^\d{12,15}$/.test(celular)
+  const conTelefono = !enNube && /^\d{12,15}$/.test(celular)   // el teléfono simulado solo existe en local
   return (
     <div className={`sitio ${conTelefono ? 'sitio-con-telefono' : ''}`}>
       <header className="barra"><h1>Salud Digna</h1><span className="tenue">Agenda tus estudios</span></header>
@@ -29,7 +29,9 @@ export function SitioPaciente() {
         )}
       </main>
       <footer className="pie">
-        <span className="tenue">Cualquier celular recibe su código en el WhatsApp simulado · 866 123 4567 a 4571: código fijo 123456</span>
+        <span className="tenue">{enNube
+          ? 'En línea · el código llega a tu WhatsApp · 866 123 4567 a 4571: código fijo 123456'
+          : 'Local · cualquier celular recibe su código en el WhatsApp simulado · 866 123 4567 a 4571: código fijo 123456'}</span>
         <a href="/personal" onClick={(e) => { e.preventDefault(); navegar('/personal') }}>Acceso personal</a>
       </footer>
     </div>

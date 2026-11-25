@@ -17,6 +17,10 @@ select vault.create_secret('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXB
                            'worker_token', 'service_role de demostración (solo local)')
 where not exists (select 1 from vault.secrets where name = 'worker_token');
 
+-- Link de pago: <pago_url_base>/pagar/<referencia>. En local, la app es el simulador.
+select vault.create_secret('http://localhost:5173', 'pago_url_base', 'URL de la app con la pantalla de pago')
+where not exists (select 1 from vault.secrets where name = 'pago_url_base');
+
 -- Catálogo inicial. Las clínicas (261 reales, con su horario de atención) las carga antes
 -- seeds/clinicas.sql, generado desde seeds/clinicasData.ts (npm run clinicas en simulador/).
 -- Los estudios y sus precios son de ejemplo.

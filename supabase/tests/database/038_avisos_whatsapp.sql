@@ -56,7 +56,7 @@ select id as ev_pago, ocurrido_en as ev_pago_en from core.eventos_tramite where 
 select tests.como_servicio();
 select api.procesar_aviso_whatsapp(:'ev_pago', :'p', :'ev_pago_en') as av \gset
 select is((:'av')::jsonb ->> 'plantilla', 'link_pago', 'Fuera de la ventana, el link de pago usa la plantilla link_pago');
-select matches((:'av')::jsonb ->> 'texto', 'Paga aquí para confirmarla: https://pagos\.ejemplo\.mx/checkout/SD-', 'con las variables llenas');
+select matches((:'av')::jsonb ->> 'texto', 'Paga aquí para confirmarla: http://localhost:5173/pagar/SD-', 'con las variables llenas');
 
 -- Dentro de la ventana (escribió por WhatsApp hace poco). En una transacción now() no avanza:
 -- el cambio de paso se mueve un minuto atrás para que quede antes de la conversación.

@@ -16,6 +16,7 @@ import { enviarAlPaciente } from '../_shared/enviar.ts'
 import {
   type ContextoDialogo, type Horario, type Intencion, interpretar, OPCION_AGREGAR, OPCION_NUEVO, type Opcion, type Paso,
 } from './interpretar.ts'
+import { pagarDemo, pagoDemoActivo, type PagoPendiente } from '../_shared/pago_demo.ts'
 import { diasEntre, fechaLarga, hoyEn, MAX_DIAS, mesDe, normalizar, resolverDiaMes, sumarDias } from './fechas.ts'
 
 // Primeras líneas que permiten reconocer, en el siguiente mensaje, a qué pregunta responde
@@ -26,6 +27,9 @@ const MARCA_DIA = '¿Qué día te gustaría?'
 const MARCA_MENU = /^Horarios del \p{L}+ (\d{1,2}) de (\p{L}+) en /u
 const MARCA_CONFIRMAR = /^¿Te aparto el \p{L}+ (\d{1,2}) de (\p{L}+) a las (\d\d:\d\d)/u
 const MENU_MAX = 10
+// Pago de prueba (PAGO_DEMO)
+const MARCA_PAGOS = 'Pagos pendientes:'
+const MARCA_PAGO_CONFIRMAR = /^Vas a pagar .+ \(referencia (SD-[0-9A-F]+)\)\. Responde SÍ/m
 const MARCA_LUGAR = '¿En qué ciudad o municipio quieres tu cita?'
 const MARCA_CLINICAS = /^Clínicas para «(.+)»:$/m
 /** Más resultados que esto: se pide un lugar más preciso */
@@ -136,6 +140,10 @@ class Conversacion {
 
   private paso(): Paso {
     const ultimo = this.ultimoBot()
+    if (pagoDemoActivo()) {
+      if (ultimo.startsWith(MARCA_PAGOS)) return 'pago_lista'
+      if (MARCA_PAGO_CONFIRMAR.test(ultimo)) return 'pago_confirmar'
+    }
     if (ultimo.startsWith(MARCA_PENDIENTES)) return 'elegir_tramite'
     if (ultimo.startsWith(MARCA_REGISTRO)) return 'registro'
     if (ultimo.startsWith(MARCA_NUEVO_ESTUDIO)) return 'nuevo_estudio'
@@ -162,10 +170,15 @@ class Conversacion {
     let horarios: Horario[] = []
     let fecha: string | undefined
     let ver_mas: number | null = null
+    let referencia: string | undefined
     const t = this.tramite
     const hoy = hoyEn()
 
-    if (paso === 'elegir_tramite') {
+    if (paso === 'pago_lista') {
+      opciones = (await this.pagosPendientes()).map((p) => ({ id: p.referencia, etiqueta: this.etiquetaPago(p) }))
+    } else if (paso === 'pago_confirmar') {
+      referencia = this.ultimoBot().match(MARCA_PAGO_CONFIRMAR)?.[1]
+    } else if (paso === 'elegir_tramite') {
       opciones = [
         ...this.pendientes.map((p) => ({
           id: p.id,
@@ -211,7 +224,7 @@ class Conversacion {
       const h = fecha ? (await this.horariosDe(fecha)).find((x) => x.hora === m![3]) : undefined
       if (h) horarios = [h]
     }
-        return { paso, opciones, horarios, hoy, fecha, ver_mas }
+        return { paso, opciones, horarios, hoy, fecha, ver_mas, referencia, pago_demo: pagoDemoActivo() }
   }
 
   /** Mensaje con la pregunta del paso actual. */
@@ -255,7 +268,29 @@ class Conversacion {
         return d.fecha ? this.mostrarDia(d.fecha, d.horarios[0]?.hora ?? null) : this.preguntar(await this.dialogo('horario_dia'))
       case 'pago':
         return this.mandarLinkDePago()
+      case 'pago_lista':
+        return this.decir(`${MARCA_PAGOS}\n${lista(d.opciones)}\nResponde con el número del que quieres pagar.`)
+      case 'pago_confirmar': {
+        const p = (await this.pagosPendientes()).find((x) => x.referencia === d.referencia)
+        return p ? this.pedirConfirmacionPago(p) : this.decir('Ese pago ya no está pendiente. Escribe "menu" para ver tus trámites.')
+      }
     }
+  }
+
+  private async pagosPendientes(): Promise<PagoPendiente[]> {
+    return await rpc(this.api, 'pagos_pendientes', { p_interaccion_id: this.int })
+  }
+
+  private etiquetaPago(p: PagoPendiente) {
+    const para = p.etiqueta.split(' · ')[1]
+    return `${pesos(p.monto)} · ${p.estudio}${para && para !== 'para ti' ? ` ${para}` : ''} (folio ${p.folio})`
+  }
+
+  private pedirConfirmacionPago(p: PagoPendiente) {
+    const para = p.etiqueta.split(' · ')[1]
+    this.decir(`Vas a pagar ${pesos(p.monto)} por ${p.estudio}${para && para !== 'para ti' ? ` ${para}` : ''} ` +
+      `(folio ${p.folio}) (referencia ${p.referencia}). Responde SÍ para confirmar o NO para cancelar.\n` +
+      '(Pago de prueba: no se hace ningún cargo real.)')
   }
 
   async mandarLinkDePago() {
@@ -263,10 +298,14 @@ class Conversacion {
     const pago = await rpc(this.api, 'generar_pago', {
       p_interaccion_id: this.int, p_tramite_id: t.id, p_version: t.version,
     })
-    this.links.push(pago.link_pago)
     const cuando = t.contexto?.fecha_hora ? fechaCorta(t.contexto.fecha_hora) : ''
+    // Con la app publicada (pago_url_base) va el link; sin ella, con el pago de prueba, "responde PAGAR"
+    const como = pago.link_pago ? `Paga aquí para confirmarla: ${pago.link_pago}`
+      : pagoDemoActivo() ? 'Para pagar, responde PAGAR.'
+      : 'En breve te enviaremos el link de pago.'
+    if (pago.link_pago) this.links.push(pago.link_pago)
     this.decir(`Tu cita: ${t.etiqueta}, ${t.clinica?.nombre}, ${cuando} (folio ${t.folio}).\n` +
-      `Total: ${pesos(pago.monto)}. Paga aquí para confirmarla: ${pago.link_pago}\n(El link vence ${fechaCorta(pago.expira_en)}.)`)
+      `Total: ${pesos(pago.monto)}. ${como}\n(Vence ${fechaCorta(pago.expira_en)}.)`)
   }
 
   private async avanzar(paso: string, datos: Record<string, string>) {
@@ -399,6 +438,27 @@ class Conversacion {
         return this.mandarLinkDePago()
       case 'pagar':
         return this.mandarLinkDePago()
+      case 'pago_demo': {
+        const pagos = await this.pagosPendientes()
+        if (!pagos.length) return this.decir('No tienes pagos pendientes. Escribe "menu" para ver tus trámites.')
+        if (pagos.length === 1) return this.pedirConfirmacionPago(pagos[0])
+        return this.decir(`${MARCA_PAGOS}\n${pagos.map((p, k) => `${k + 1}) ${this.etiquetaPago(p)}`).join('\n')}\n` +
+          'Responde con el número del que quieres pagar.')
+      }
+      case 'pago_elegir': {
+        const p = (await this.pagosPendientes()).find((x) => x.referencia === i.referencia)
+        return p ? this.pedirConfirmacionPago(p) : this.decir('Ese pago ya no está pendiente.')
+      }
+      case 'pago_confirmado': {
+        const p = (await this.pagosPendientes()).find((x) => x.referencia === i.referencia)
+        const r = await pagarDemo(this.api, this.int, i.referencia)
+        await this.recargar()
+        if (r.repetido) return this.decir('Ese pago ya estaba confirmado. ✅')
+        return this.decir(`✅ Pago recibido (prueba). Tu cita quedó confirmada${p ? `: ${p.etiqueta}, ${fechaCorta(p.fecha_hora)} (folio ${p.folio})` : ''}.`)
+      }
+      case 'pago_cancelado':
+        this.decir('Listo, no se hizo ningún cargo.')
+        return this.preguntar(await this.dialogo(this.pendientes.length ? 'elegir_tramite' : 'menu'))
       case 'no_entendido':
         if (d.paso !== 'en_atencion') this.decir('No te entendí 🤔')
         return this.preguntar(d)

@@ -33,10 +33,15 @@ Deno.serve(async (req) => {
 
     // Solo en el simulador: avisar en la bandeja del teléfono que pagó.
     // (En producción el aviso al paciente lo haría el worker de notificaciones.)
+    // Si el aviso falla, el pago YA quedó confirmado: no se reporta como error.
     if (modoSimulador && typeof telefono === 'string' && !resultado?.repetido) {
-      await enviarAlPaciente(telefono, 'sistema', estado === 'pagado'
-        ? `Recibimos tu pago (referencia ${referencia}). Tu cita quedó confirmada.`
-        : `Tu pago con referencia ${referencia} fue rechazado. Puedes intentarlo de nuevo.`)
+      try {
+        await enviarAlPaciente(telefono, 'sistema', estado === 'pagado'
+          ? `Recibimos tu pago (referencia ${referencia}). Tu cita quedó confirmada.`
+          : `Tu pago con referencia ${referencia} fue rechazado. Puedes intentarlo de nuevo.`)
+      } catch (e) {
+        console.error('pagos-webhook: pago confirmado, pero no se pudo avisar al paciente:', e instanceof Error ? e.message : e)
+      }
     }
     return json(resultado)
   } catch (e) {

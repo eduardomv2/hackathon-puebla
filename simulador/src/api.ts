@@ -19,7 +19,20 @@ type Args<F extends keyof Funciones> = Funciones[F]['Args']
  * Crea un cliente. `almacen` separa la sesión guardada: en un mismo navegador pueden
  * convivir la paciente (anónima), el asesor y el admin, cada uno con su propia sesión.
  */
+/** Modo nube (npm run dev:prod): la base de supabase.com. Sin simulador ni /demo. */
+export const enNube = import.meta.env.VITE_ENTORNO === 'nube'
+
+/** La clave secreta (service_role / sb_secret_) NUNCA va al navegador. */
+function exigirClavePublica(clave: string) {
+  let rol: string | undefined
+  try { rol = clave.startsWith('eyJ') ? JSON.parse(atob(clave.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).role : undefined } catch { /* no es JWT */ }
+  if (clave.startsWith('sb_secret_') || rol === 'service_role') {
+    throw new Error('Configuración insegura: el simulador recibió la clave SECRETA. Usa la publishable (sb_publishable_…).')
+  }
+}
+
 export function crearCliente(url: string, clavePublica: string, almacen: string): Cliente {
+  exigirClavePublica(clavePublica)
   return createClient<Database, 'api'>(url, clavePublica, {
     db: { schema: 'api' },
     auth: { storageKey: `sd-${almacen}`, persistSession: true, autoRefreshToken: true },
@@ -266,7 +279,7 @@ export interface CitaProxima {
   beneficiario: { id: string; nombre: string | null; relacion: Relacion }
 }
 
-export interface PagoPendiente { id: string; monto: number; link_pago: string; expira_en: string }
+export interface PagoPendiente { id: string; monto: number; link_pago: string | null; expira_en: string }
 
 /** Contexto unificado de una sesión. Lo que trae depende del nivel de verificación. */
 export interface Contexto {
@@ -304,7 +317,17 @@ export interface Beneficiario {
   id: string; nombre: string; relacion: Relacion
   nombre_completo?: string; fecha_nacimiento?: string; es_tutor_legal?: boolean
 }
-export interface Pago { pago_id: string; monto: number; moneda: string; link_pago: string; expira_en: string; version: number }
+export interface Pago {
+  pago_id: string; referencia: string; monto: number; moneda: string
+  /** Nulo si no hay app publicada con pantalla de pago (pago_url_base) */
+  link_pago: string | null
+  expira_en: string; version: number
+}
+/** api.pagos_pendientes: lo que el paciente puede pagar (con referencia, estudio y para quién) */
+export interface PagoPorPagar {
+  referencia: string; monto: number; moneda: string; estudio: string; etiqueta: string; folio: string
+  tramite_id: string; fecha_hora: string; expira_en: string; link_pago: string | null
+}
 
 export interface CitaAgenda {
   cita_id: string; fecha_hora: string; estado: string; estudio: string; paciente: string
@@ -682,4 +705,15 @@ export const forzarRecordatorio = (c: Cliente, folio: string) =>
   rpcSimulador<{ folio: string; recordatorios_programados: number }>(c, 'forzar_recordatorio', { p_folio: folio })
 
 /** Referencia de pago a partir del link (…/checkout/SD-XXXX). */
-export const referenciaDeLink = (link: string) => link.split('/checkout/')[1] ?? link
+/** "…/pagar/SD-…" (o el formato anterior "…/checkout/SD-…") → "SD-…" */
+export const referenciaDeLink = (link: string) => link.match(/\/(?:pagar|checkout)\/(SD-[0-9A-F]+)/)?.[1] ?? link
+
+// =====================================================================
+// Pago de prueba (PAGO_DEMO): solo el paciente dueño, por la Edge Function pago-demo
+// =====================================================================
+export const pagosPendientes = (c: Cliente, interaccion: string) =>
+  llamar<'pagos_pendientes', PagoPorPagar[]>(c, 'pagos_pendientes', { p_interaccion_id: interaccion })
+
+export const pagarDemo = (c: Cliente, interaccion: string, referencia: string) =>
+  invocar<{ estado: string; repetido?: boolean }>(c, 'pago-demo', { interaccion_id: interaccion, referencia })
+

@@ -41,6 +41,7 @@ supabase/
     20261125052220_codigo_auth_whatsapp.sql  Send SMS Hook: el código del celular va por WhatsApp
     20261125053539_codigo_respaldo_sms.sql   si WhatsApp no lo entrega, el mismo código por SMS
     20261125063632_codigo_auth_sesion_reciente.sql  al pedir código, solo esa sesión queda esperando el número
+    20261125082051_pago_demo.sql             link de pago configurable (pago_url_base), pagos_pendientes, pago simulado
   functions/                                Edge Functions (Deno)
     whatsapp-webhook/                       webhook de WhatsApp Cloud API + agente guiado (interpretar.ts, fechas.ts)
     enviar-otp/                             el asesor pide un OTP; el código va al teléfono del paciente
@@ -48,6 +49,7 @@ supabase/
     avisos-whatsapp/                        worker: entrega a WhatsApp lo que pasa en otros canales
     procesar-resumenes/                     worker: resumen del trámite para el asesor (Claude o plantilla)
     enviar-codigo-auth/                     entrega el código de verificación de Auth (hook): WhatsApp y, si falla, SMS
+    pago-demo/                              pago de prueba sin pasarela (solo con PAGO_DEMO=true)
     _shared/                                clientes de Supabase, envío al paciente, HTTP
   seeds/clinicasData.ts                     directorio de las 261 clínicas (el mismo que usa la interfaz)
   seeds/clinicas.sql                        GENERADO (npm run clinicas en simulador/): clínicas + horarios de atención
@@ -89,6 +91,27 @@ const supabase = createClient(
   `admin@demo.mx`. La contraseña **no** es `demo1234`: pídesela a Eduardo (no va en el repositorio).
 - Datos: 261 clínicas reales con horarios, 6 estudios de ejemplo. El simulador está apagado.
 - Nunca uses la clave secreta (`sb_secret_…` / service_role) en una app: solo va en Edge Functions.
+- **Pago de prueba** (`PAGO_DEMO=true` en el proyecto en línea; no hay pasarela real):
+  - App: la pantalla de pago llama `supabase.functions.invoke('pago-demo', { body: { interaccion_id, referencia } })`
+    con la sesión del paciente. Solo el dueño del pago; pagar dos veces responde igual (`repetido: true`).
+    `api.pagos_pendientes(interaccion)` da lo que tiene por pagar (monto, estudio, para quién, referencia).
+  - WhatsApp: el paciente responde **PAGAR** → "Vas a pagar $450 por …. Responde SÍ" → cita confirmada.
+  - El link de pago es `<pago_url_base>/pagar/<referencia>` (secreto `pago_url_base` en Vault). Mientras la
+    app no esté publicada no existe y el bot indica "responde PAGAR". Al publicarla:
+    `select vault.create_secret('https://<app>', 'pago_url_base');` y la app atiende `/pagar/:referencia`.
+  - Todo termina en `api.confirmar_pago` (el mismo camino del webhook real); el evento `pago_confirmado`
+    lleva `simulado: true`. Con `PAGO_DEMO` apagado, `pago-demo` responde 404 y el bot ignora "PAGAR".
+
+### Simulador: local o nube
+
+| Comando (en `simulador/`) | Base | Qué funciona |
+|---|---|---|
+| `npm run dev` | Supabase local (`.env.local`) | Todo: `/`, `/personal`, `/demo`, teléfono simulado |
+| `npm run dev:prod` | supabase.com (`.env.produccion`) | `/` y `/personal` contra la base en línea; `/demo` y el teléfono simulado muestran que solo existen en local |
+
+`.env.produccion` solo tiene la URL y la clave publishable (está en el repositorio). El simulador se niega a
+arrancar si recibe una clave secreta. En la nube el botón de pago es el de prueba (`pago-demo`).
+
 
 ## Instalar en Supabase
 
@@ -146,6 +169,7 @@ const supabase = createClient(
    | `WHATSAPP_APP_SECRET` | whatsapp-webhook | Verificar la firma `X-Hub-Signature-256` de Meta |
    | `WHATSAPP_VERIFY_TOKEN` | whatsapp-webhook | Verificación GET al registrar el webhook en Meta |
    | `PAGOS_WEBHOOK_SECRET` | pagos-webhook | Verificar el header `x-firma` (HMAC-SHA256 del cuerpo) |
+   | `PAGO_DEMO` | pago-demo, whatsapp-webhook | `true` = pago de prueba sin pasarela (por omisión apagado) |
    | `WORKER_TOKEN` | avisos-whatsapp, procesar-resumenes, enviar-codigo-auth | Igual a `worker_token` de Vault: solo la base puede invocarlas |
    | `WHATSAPP_TOKEN` | todas las que envían | Token de acceso de WhatsApp Cloud API (usuario del sistema de Meta Business) |
    | `WHATSAPP_PHONE_NUMBER_ID` | todas las que envían | Id del número que envía (en Meta → WhatsApp → API Setup) |
@@ -250,6 +274,7 @@ Los roles se simulan igual que PostgREST: `set local role` más `request.jwt.cla
 | `110_catalogo` | Catálogo público, búsqueda sin acentos, inactivos ocultos, rate limit de anon |
 | `120_horarios` | Horario real (domingo 6:30–14:00, lunes 6:00–19:00), clínica cerrada en domingo, festivos sin horarios, horario lleno oculto, 3:00 y 9:10 rechazados, zona horaria |
 | `130_simulador` | Apagado por defecto (42501), encendido funciona, limpieza a la hora |
+| `230_pago_demo` | Link = pago_url_base/pagar/referencia (sin él, nulo), solo el dueño ve y encuentra su pago, el personal no, solo el servidor confirma, evento con `simulado: true`, pagar dos veces es idempotente |
 | `220_codigo_auth_sesion_reciente` | Dos sesiones esperan el mismo número: al pedir código, la vieja lo pierde (y su token), la nueva lo conserva, otros números no se tocan |
 | `210_codigo_respaldo_sms` | Código guardado cifrado y por 10 min, si falló se devuelve una sola vez, entregado o vencido no se reenvía, 22023 con teléfono inválido, ni anon ni usuarios lo leen |
 | `200_codigo_auth_whatsapp` | Solo Auth ejecuta el hook, responde `{}` y encola la llamada a `enviar-codigo-auth` con el worker_token, 400 sin código, usa `new_phone` si falta `sms.phone`, 429 al sexto código en 10 min |

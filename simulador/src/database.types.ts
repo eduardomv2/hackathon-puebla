@@ -91,8 +91,17 @@ export type Database = {
 "obtener_contexto":
 { Args: { "p_interaccion_id": string }; Returns: Json
                            },
+"pago_del_paciente":
+{ Args: { "p_interaccion_id": string,"p_referencia": string }; Returns: Json
+                           },
+"pagos_pendientes":
+{ Args: { "p_interaccion_id": string }; Returns: Json
+                           },
 "procesar_aviso_whatsapp":
 { Args: { "p_evento_id": string,"p_ocurrido_en": string,"p_paciente_id": string }; Returns: Json
+                           },
+"registrar_codigo_enviado":
+{ Args: { "p_codigo": string,"p_mensaje_id": string,"p_telefono": string }; Returns: undefined
                            },
 "registrar_consentimiento_avisos":
 { Args: { "p_acepta": boolean,"p_interaccion_id": string }; Returns: Json
@@ -105,6 +114,9 @@ export type Database = {
                            },
 "reservar_cita":
 { Args: { "p_fecha_hora": string,"p_interaccion_id": string,"p_tramite_id": string,"p_version": number }; Returns: Json
+                           },
+"resolver_codigo_enviado":
+{ Args: { "p_entregado": boolean,"p_mensaje_id": string }; Returns: Json
                            },
 "retomar_tramite":
 { Args: { "p_interaccion_id": string,"p_tramite_id": string }; Returns: Json

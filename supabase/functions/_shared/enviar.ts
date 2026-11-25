@@ -91,7 +91,9 @@ export async function enviarCodigo(telefono: string, codigo: string, texto: stri
   // Se guarda (cifrado, 10 min) por si Meta avisa que no se entregó
   if (canal === 'whatsapp_y_sms' && mensajeId) {
     try {
-      await rpc(clienteServicio(telefono), 'registrar_codigo_enviado', { p_mensaje_id: mensajeId, p_telefono: telefono, p_codigo: codigo })
+      await rpc(clienteServicio(telefono), 'registrar_codigo_enviado', {
+        p_mensaje_id: mensajeId, p_telefono: telefono.replace(/\D/g, ''), p_codigo: codigo,
+      })
     } catch (e) {
       console.error('No se pudo registrar el código para el respaldo por SMS:', e)
     }

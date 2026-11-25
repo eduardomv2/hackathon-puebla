@@ -18,6 +18,7 @@ export type Paso =
   | 'clinica_lugar' | 'clinica'             // ¿en qué ciudad? → clínicas de ese lugar
   | 'horario_dia' | 'horario_menu' | 'horario_confirmar'   // ¿qué día? → menú de horas del día → ¿te aparto…?
   | 'pago'
+  | 'pago_lista' | 'pago_confirmar'        // pago de prueba (PAGO_DEMO): ¿cuál? → "Vas a pagar… ¿SÍ?"
 
 export type Opcion = { id: string; etiqueta: string }
 export type Horario = { fecha_hora: string; fecha: string; hora: string }
@@ -34,6 +35,10 @@ export type ContextoDialogo = {
   fecha?: string
   /** Número de la opción "Ver más" del menú (si la hay) */
   ver_mas?: number | null
+  /** Pago de prueba encendido (PAGO_DEMO): "PAGAR" paga sin pasarela */
+  pago_demo?: boolean
+  /** Referencia del pago que se está confirmando (paso pago_confirmar) */
+  referencia?: string
 }
 
 export type DatosFamiliar = {
@@ -62,6 +67,10 @@ export type Intencion =
   | { tipo: 'fecha_invalida'; motivo: 'pasada' | 'lejana' | 'no_entendida'; fecha?: string }
   | { tipo: 'ver_mas' }
   | { tipo: 'pagar' }
+  | { tipo: 'pago_demo' }
+  | { tipo: 'pago_elegir'; referencia: string }
+  | { tipo: 'pago_confirmado'; referencia: string }
+  | { tipo: 'pago_cancelado' }
   | { tipo: 'registrar_nombre'; nombre: string; apellido_paterno: string; apellido_materno: string | null }
   | { tipo: 'pedir_nombre'; error: string }
   | { tipo: 'no_entendido' }
@@ -153,6 +162,8 @@ export function interpretar(mensaje: string, ctx: ContextoDialogo): Intencion {
   if (/^(hola|holi|buen[oa]s?( dias| tardes| noches)?|que tal)\b/.test(t)) return { tipo: 'menu' }
   if (/^(ayuda|\?)$/.test(t)) return { tipo: 'ayuda' }
   if (/^(mis citas|ver (mis )?citas)$/.test(t)) return { tipo: 'ver_citas' }
+  // Pago de prueba: "PAGAR" en cualquier paso (apagado, el bot lo ignora aquí)
+  if (ctx.pago_demo && /^pagar$/.test(t) && ctx.paso !== 'pago_confirmar') return { tipo: 'pago_demo' }
 
   const n = numeroDeOpcion(t, ctx.opciones.length)
 
@@ -249,6 +260,15 @@ export function interpretar(mensaje: string, ctx: ContextoDialogo): Intencion {
 
     case 'pago':
       if (/\b(pagar|pago|link|liga|enlace)\b/.test(t)) return { tipo: 'pagar' }
+      return { tipo: 'no_entendido' }
+
+    case 'pago_lista':
+      if (n) return { tipo: 'pago_elegir', referencia: ctx.opciones[n - 1].id }
+      return { tipo: 'no_entendido' }
+
+    case 'pago_confirmar':
+      if (/^(si|sip|confirmo|pagar|ok)\b/.test(t) && ctx.referencia) return { tipo: 'pago_confirmado', referencia: ctx.referencia }
+      if (/^(no|nop|cancelar|mejor no)\b/.test(t)) return { tipo: 'pago_cancelado' }
       return { tipo: 'no_entendido' }
   }
 }

@@ -81,7 +81,7 @@ declare
 begin
   v_pago := api.generar_pago(p_int, p_tramite, p_version);
   perform tests.como_servicio();
-  perform api.confirmar_pago(split_part(v_pago ->> 'link_pago', '/checkout/', 2), 'pagado');
+  perform api.confirmar_pago(v_pago ->> 'referencia', 'pagado');
   perform tests.como(v_rol, nullif(v_claims, '')::jsonb);
   return v_pago;
 end $$;

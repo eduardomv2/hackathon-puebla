@@ -462,3 +462,7 @@ verify_jwt = false
 # La llama la base por pg_net con el worker_token; la función lo valida
 [functions.enviar-codigo-auth]
 verify_jwt = false
+
+# Pago de prueba de las apps: valida el JWT del paciente por dentro; sin PAGO_DEMO=true responde 404
+[functions.pago-demo]
+verify_jwt = false

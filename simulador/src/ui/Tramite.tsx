@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import {
   agregarBeneficiario, avanzarTramite, catalogoEstudios, clinicasParaEstudio, generarPago, horariosDisponibles,
   iniciarTramite, misBeneficiarios, obtenerContexto, pagarSimulado, referenciaDeLink, reservarCita, retomarTramite,
-  ubicacionesClinicas,
+  ubicacionesClinicas, enNube, pagarDemo, pagosPendientes,
   type Beneficiario, type Cliente, type Clinica, type Contexto, type Estudio, type Horario, type Pago, type Relacion,
   type Ubicacion,
 } from '../api'
@@ -337,20 +337,36 @@ function PasoPago({ cliente, ctx, av, hacer, telefonoAviso }: PasoProps & { tele
   const t = ctx.tramite_activo!
   const pendiente = ctx.pagos_pendientes?.[0]
   const [pago, setPago] = useState<Pago | null>(null)
-  const link = pago?.link_pago ?? pendiente?.link_pago
+  const link = pago?.link_pago ?? pendiente?.link_pago ?? null
+  const generado = Boolean(pago || pendiente)
+  const esPaciente = ctx.sesion.canal === 'web' || ctx.sesion.canal === 'app'
+  // Nube: sin pasarela, el paciente paga con el pago de prueba (pago-demo); el personal no paga por él
+  const pagarEnNube = async () => {
+    const ref = pago?.referencia ?? (await pagosPendientes(cliente, int)).find((p) => p.tramite_id === t.id)?.referencia
+    if (!ref) throw new Error('No encontré el pago pendiente de este trámite')
+    await pagarDemo(cliente, int, ref)
+  }
   return (
     <div className="paso">
       <h4>Cita apartada</h4>
       <p>{t.estudio?.nombre} · {t.clinica?.nombre} · {fechaHora(t.contexto.fecha_hora)} · <b>{dinero(t.contexto.precio)}</b>
         {t.beneficiario && t.beneficiario.relacion !== 'titular' && <span className="tenue"> · para {t.beneficiario.nombre}</span>}</p>
-      {link
-        ? <>
-            <p className="link">{link}</p>
-            <button disabled={av.ocupado} onClick={() => hacer(() => pagarSimulado(cliente, referenciaDeLink(link), telefonoAviso))}>
-              Pagar (proveedor simulado)
-            </button>
-          </>
-        : <button disabled={av.ocupado} onClick={() => av.accion(async () => setPago(await generarPago(cliente, int, t)))}>Generar link de pago</button>}
+      {!generado
+        ? <button disabled={av.ocupado} onClick={() => av.accion(async () => setPago(await generarPago(cliente, int, t)))}>Generar pago</button>
+        : <>
+            {link && <p className="link">{link}</p>}
+            {!enNube && link && (
+              <button disabled={av.ocupado} onClick={() => hacer(() => pagarSimulado(cliente, referenciaDeLink(link), telefonoAviso))}>
+                Pagar (proveedor simulado)
+              </button>
+            )}
+            {enNube && esPaciente && (
+              <button disabled={av.ocupado} onClick={() => hacer(pagarEnNube)}>Pagar (prueba, sin cargo)</button>
+            )}
+            {enNube && !esPaciente && (
+              <p className="tenue">El paciente paga desde su app o por WhatsApp (respondiendo PAGAR).</p>
+            )}
+          </>}
       <button className="secundario" disabled={av.ocupado} onClick={() => hacer(() => avanzarTramite(cliente, int, t, 'seleccion_horario'))}>← Cambiar horario</button>
     </div>
   )

@@ -60,3 +60,14 @@ test('clínica: primero el lugar, luego cuál', () => {
   assert.deepEqual(interpretar('capu', lista), { tipo: 'elegir_clinica', clinica_id: 'b' })
   assert.deepEqual(interpretar('mejor en Cholula', lista), { tipo: 'buscar_clinica', texto: 'Cholula' }, 'otro lugar')
 })
+
+test('pago de prueba: PAGAR solo con PAGO_DEMO encendido', () => {
+  assert.deepEqual(interpretar('PAGAR', ctx('menu', { pago_demo: true })), { tipo: 'pago_demo' })
+  assert.deepEqual(interpretar('pagar', ctx('horario_dia', { pago_demo: true })), { tipo: 'pago_demo' }, 'en cualquier paso')
+  assert.equal(interpretar('PAGAR', ctx('menu')).tipo, 'no_entendido', 'apagado: el bot lo ignora')
+  const lista = ctx('pago_lista', { pago_demo: true, opciones: [{ id: 'SD-A', etiqueta: '$450' }, { id: 'SD-B', etiqueta: '$120' }] })
+  assert.deepEqual(interpretar('2', lista), { tipo: 'pago_elegir', referencia: 'SD-B' })
+  const conf = ctx('pago_confirmar', { pago_demo: true, referencia: 'SD-A' })
+  assert.deepEqual(interpretar('Sí', conf), { tipo: 'pago_confirmado', referencia: 'SD-A' })
+  assert.deepEqual(interpretar('no', conf), { tipo: 'pago_cancelado' })
+})

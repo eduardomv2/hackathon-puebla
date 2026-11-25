@@ -20,3 +20,5 @@ supabase/.branches/
 .DS_Store
 *.log
 *.sw?
+# Solo URL y clave publishable (públicas) del proyecto en línea
+!simulador/.env.produccion
