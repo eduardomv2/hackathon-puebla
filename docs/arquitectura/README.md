@@ -16,7 +16,7 @@ en GitHub y se pegan en <https://mermaid.live> para exportarlos como imagen.
 | 8 | [Bitácora de decisiones](08_decisiones.md) | Cada decisión tomada, el porqué y lo que se descartó |
 | 9 | [Estado y pendientes](09_estado_y_pendientes.md) | Qué está hecho, qué falta y qué es solo de demostración |
 
-Documentos relacionados (ya existentes): [`../../README.md`](../../README.md) (operación y referencia de la API),
+Documentos relacionados (ya existentes): [`../api/`](../api/openapi.json) (Swagger/OpenAPI de la API), [`../../README.md`](../../README.md) (operación y referencia de la API),
 [`../GUIA_APP_PWA.md`](../GUIA_APP_PWA.md) (guía para construir la app del paciente y las consolas).
 
 ## Cómo leerla según lo que necesites

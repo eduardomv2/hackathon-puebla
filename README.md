@@ -6,6 +6,10 @@ trámite por paciente. Corre en Supabase (PostgreSQL 17).
 > **Documentación de arquitectura** (resumen, diagramas, modelo de datos, conexión omnicanal, seguridad,
 > escalabilidad, comparación con otras plataformas y decisiones): [`docs/arquitectura/`](docs/arquitectura/README.md).
 
+> **Referencia de la API (Swagger / OpenAPI)**: [`docs/api/openapi.json`](docs/api/openapi.json) con las 50 funciones,
+> sus parámetros, roles, respuestas y errores. Para verla con Swagger UI: `cd docs/api && python3 -m http.server 8766`
+> y abre <http://127.0.0.1:8766>. Se regenera desde la base con `npm run openapi` (en `simulador/`, base local encendida).
+
 ## Estructura
 
 ```

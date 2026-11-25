@@ -9,6 +9,8 @@
 > (`simulador/src/api.ts` = cliente de la API ya tipado; `simulador/src/ui/Tramite.tsx` = flujo del paciente;
 > `simulador/src/paneles/*` = las consolas del personal). **Cuando dudes, copia cómo lo hace el simulador.**
 
+> **Referencia de cada función en Swagger/OpenAPI:** [`docs/api/openapi.json`](api/openapi.json) (visor: `docs/api/index.html`).
+
 ## 0. Reglas de oro (léelas primero)
 
 1. **Clave secreta jamás en la app.** La app solo usa la clave **publishable** (`sb_publishable_…`). La clave

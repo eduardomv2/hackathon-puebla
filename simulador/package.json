@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "openapi": "tsx scripts/openapi.mts",
     "tipos": "cd .. && npx supabase gen types typescript --local --schema api < /dev/null > simulador/src/database.types.ts",
     "usuarios": "tsx scripts/crear-usuarios.ts",
     "clinicas": "tsx scripts/generar-clinicas.ts",

@@ -63,7 +63,7 @@ La base empuja eventos a las apps por Realtime y despierta a los workers con `pg
 ```mermaid
 flowchart TB
   subgraph pub["Superficie pública"]
-    API["esquema api<br/>57 funciones RPC (solo POST)"]
+    API["esquema api<br/>50 funciones RPC (solo POST)"]
   end
   subgraph prv["Interno (nadie lo lee directo)"]
     CORE["esquema core<br/>tablas, reglas, triggers"]

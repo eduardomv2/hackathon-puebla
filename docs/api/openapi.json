@@ -1,0 +1,4982 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "API del orquestador omnicanal Salud Digna",
+    "version": "1.0.0",
+    "description": "Todo el negocio vive en la base. Cada función del esquema `api` es un endpoint **POST** con cuerpo JSON (PostgREST).\n\n**Reglas**\n- Solo POST. Un GET responde `PT405`.\n- Cabeceras: `apikey` (clave publishable) y `Authorization: Bearer <JWT>`. Con supabase-js basta `createClient(url, publishable, { db: { schema: \"api\" } })`.\n- La clave secreta (`service_role`) **nunca** va en un navegador: solo en Edge Functions o servidores.\n- Decide por el campo `code` del error, no por el texto.\n- Mande el header `x-sd-telefono` cuando un servicio actúa por un paciente (límite por teléfono).\n\n**Niveles de verificación:** `declarada` (solo ve que hay un trámite), `canal` (datos enmascarados) y `verificada` (todo).\n\n**Límites por minuto:** anónimo 30 (IP), paciente 120, personal 600, servicio 300 por teléfono.\n\nGuía de uso por rol: `docs/GUIA_APP_PWA.md`. Generado de la base con `npm run openapi` (en `simulador/`)."
+  },
+  "servers": [
+    {
+      "url": "https://bdkjkmynxaphqcnapmjk.supabase.co/rest/v1/rpc",
+      "description": "Nube (proyecto hackathon-omnicanal)"
+    },
+    {
+      "url": "http://127.0.0.1:54321/rest/v1/rpc",
+      "description": "Local (supabase start)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Sesión y contexto"
+    },
+    {
+      "name": "Catálogo (público)"
+    },
+    {
+      "name": "Trámite"
+    },
+    {
+      "name": "Citas"
+    },
+    {
+      "name": "Pagos"
+    },
+    {
+      "name": "Datos y verificación"
+    },
+    {
+      "name": "Personal (asesor y recepción)"
+    },
+    {
+      "name": "Supervisión"
+    },
+    {
+      "name": "Servicio (Edge Functions y workers)"
+    }
+  ],
+  "security": [
+    {
+      "apikey": [],
+      "bearer": []
+    }
+  ],
+  "paths": {
+    "/agenda_clinica": {
+      "post": {
+        "tags": [
+          "Personal (asesor y recepción)"
+        ],
+        "summary": "Agenda del día de una clínica",
+        "operationId": "agenda_clinica",
+        "description": "Citas del día con turno, área, preparación y si ya pagó.\n\n**Quién puede llamarla:** recepcion (su clínica), asesor, supervisor, admin.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "recepcion (su clínica), asesor, supervisor, admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_clinica_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la clínica."
+                  },
+                  "p_fecha": {
+                    "type": "string",
+                    "format": "date",
+                    "default": "CURRENT_DATE"
+                  }
+                },
+                "required": [
+                  "p_clinica_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lista de citas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agregar_beneficiario": {
+      "post": {
+        "tags": [
+          "Trámite"
+        ],
+        "summary": "Registrar a un familiar",
+        "operationId": "agregar_beneficiario",
+        "description": "Máximo 10 por titular (`PT409`). Reutiliza al familiar si ya existía.\n\n**Quién puede llamarla:** paciente, servicio, personal verificado.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "paciente, servicio, personal verificado",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_nombre": {
+                    "type": "string"
+                  },
+                  "p_apellido_paterno": {
+                    "type": "string"
+                  },
+                  "p_apellido_materno": {
+                    "type": "string"
+                  },
+                  "p_fecha_nacimiento": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Fecha de nacimiento."
+                  },
+                  "p_sexo": {
+                    "type": "string",
+                    "description": "Sexo.",
+                    "enum": [
+                      "F",
+                      "M",
+                      "X"
+                    ]
+                  },
+                  "p_relacion": {
+                    "type": "string",
+                    "description": "Relación con el titular.",
+                    "enum": [
+                      "hijo",
+                      "hija",
+                      "madre",
+                      "padre",
+                      "conyuge",
+                      "otro"
+                    ]
+                  },
+                  "p_es_tutor_legal": {
+                    "type": "boolean",
+                    "description": "El titular es tutor legal.",
+                    "default": "false"
+                  }
+                },
+                "required": [
+                  "p_interaccion_id",
+                  "p_nombre",
+                  "p_apellido_paterno",
+                  "p_apellido_materno",
+                  "p_fecha_nacimiento",
+                  "p_sexo",
+                  "p_relacion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Beneficiario (beneficiario_id, reutilizado).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto: versión, cupo, duplicado, límite de beneficiarios.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/avanzar_tramite": {
+      "post": {
+        "tags": [
+          "Trámite"
+        ],
+        "summary": "Avanzar un paso del trámite",
+        "operationId": "avanzar_tramite",
+        "description": "Cambia de paso con control de versión (`PT409` si otro canal lo movió) y llave de idempotencia opcional.\n\n**Quién puede llamarla:** paciente, servicio, personal.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "paciente, servicio, personal",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_tramite_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id del trámite."
+                  },
+                  "p_version": {
+                    "type": "integer",
+                    "description": "Versión del trámite que viste. Si otro canal lo cambió: `PT409`."
+                  },
+                  "p_paso": {
+                    "type": "string"
+                  },
+                  "p_datos": {
+                    "type": "object",
+                    "description": "Datos adicionales (objeto).",
+                    "default": "{}"
+                  },
+                  "p_clave_idempotencia": {
+                    "type": "string",
+                    "description": "Llave para reintentar sin duplicar."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id",
+                  "p_tramite_id",
+                  "p_version",
+                  "p_paso"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Trámite actualizado con la nueva version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto: versión, cupo, duplicado, límite de beneficiarios.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "`tramite_en_atencion`: el personal tiene el trámite; se puede ver pero no cambiar.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bandeja_atencion": {
+      "post": {
+        "tags": [
+          "Supervisión"
+        ],
+        "summary": "Bandeja de atención",
+        "operationId": "bandeja_atencion",
+        "description": "Cinco categorías: `atorados`, `pago_por_vencer`, `en_atencion`, `seguridad`, `llegadas_hoy`. Sin categoría devuelve conteos. Paginación por cursor, máximo 50.\n\n**Quién puede llamarla:** supervisor, admin.\n\n**Credenciales con permiso de ejecución:** authenticated.",
+        "x-roles": "supervisor, admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_clinica_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la clínica."
+                  },
+                  "p_categoria": {
+                    "type": "string",
+                    "description": "Categoría."
+                  },
+                  "p_limite": {
+                    "type": "integer",
+                    "description": "Máximo de resultados.",
+                    "default": "20"
+                  },
+                  "p_cursor": {
+                    "type": "string"
+                  },
+                  "p_canal": {
+                    "type": "string",
+                    "description": "Canal.",
+                    "enum": [
+                      "web",
+                      "app",
+                      "whatsapp",
+                      "call_center",
+                      "clinica"
+                    ]
+                  },
+                  "p_estado": {
+                    "type": "string",
+                    "description": "Estado."
+                  },
+                  "p_desde": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "p_hasta": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Conteos o lista de la categoría.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/buscar_conocimiento": {
+      "post": {
+        "tags": [
+          "Servicio (Edge Functions y workers)"
+        ],
+        "summary": "Búsqueda híbrida en la base de conocimiento",
+        "operationId": "buscar_conocimiento",
+        "description": "Texto más vector.\n\n**Quién puede llamarla:** servicio, personal, paciente.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "servicio, personal, paciente",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_consulta": {
+                    "type": "string"
+                  },
+                  "p_embedding": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "description": "Embedding"
+                  },
+                  "p_limite": {
+                    "type": "integer",
+                    "description": "Máximo de resultados.",
+                    "default": "5"
+                  },
+                  "p_categoria": {
+                    "type": "string",
+                    "description": "Categoría."
+                  }
+                },
+                "required": [
+                  "p_consulta",
+                  "p_embedding"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Fragmentos con puntaje.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/buscar_pacientes": {
+      "post": {
+        "tags": [
+          "Supervisión"
+        ],
+        "summary": "Buscar paciente",
+        "operationId": "buscar_pacientes",
+        "description": "Por folio, celular o nombre.\n\n**Quién puede llamarla:** supervisor, admin.\n\n**Credenciales con permiso de ejecución:** authenticated.",
+        "x-roles": "supervisor, admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_texto": {
+                    "type": "string",
+                    "description": "Texto de búsqueda."
+                  },
+                  "p_limite": {
+                    "type": "integer",
+                    "description": "Máximo de resultados.",
+                    "default": "20"
+                  }
+                },
+                "required": [
+                  "p_texto"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lista de pacientes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cancelar_cita": {
+      "post": {
+        "tags": [
+          "Citas"
+        ],
+        "summary": "Cancelar una cita",
+        "operationId": "cancelar_cita",
+        "description": "Si estaba pagada, el pago queda `reembolsado`. Si no, el link expira. El trámite abierto se cancela.\n\n**Quién puede llamarla:** paciente, servicio, asesor, recepcion.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "paciente, servicio, asesor, recepcion",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_cita_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la cita."
+                  },
+                  "p_motivo": {
+                    "type": "string",
+                    "description": "Motivo, opcional."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id",
+                  "p_cita_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`{cita_id, estado, reembolso, folio}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CitaCancelada"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalogo_estudios": {
+      "post": {
+        "tags": [
+          "Catálogo (público)"
+        ],
+        "summary": "Estudios disponibles",
+        "operationId": "catalogo_estudios",
+        "description": "Lista estudios activos con precio base y preparación. Búsqueda sin acentos.\n\n**Quién puede llamarla:** público (anon incluido).\n\n**Credenciales con permiso de ejecución:** anon, authenticated, service_role.",
+        "x-roles": "público (anon incluido)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_busqueda": {
+                    "type": "string",
+                    "description": "Texto de búsqueda (sin acentos)."
+                  },
+                  "p_categoria": {
+                    "type": "string",
+                    "description": "Categoría."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lista de estudios (id, clave, nombre, categoría, preparación, duración, precio_base).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cerrar_interaccion": {
+      "post": {
+        "tags": [
+          "Sesión y contexto"
+        ],
+        "summary": "Cerrar la interacción (colgar)",
+        "operationId": "cerrar_interaccion",
+        "description": "Cierra la interacción y libera el bloqueo de atención de los trámites que tenía tomados.\n\n**Quién puede llamarla:** dueño de la interacción.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "dueño de la interacción",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_resultado": {
+                    "type": "string",
+                    "description": "Resultado de la interacción.",
+                    "default": "finalizada"
+                  }
+                },
+                "required": [
+                  "p_interaccion_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sin cuerpo."
+          },
+          "204": {
+            "description": "Sin cuerpo."
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clinicas_para_estudio": {
+      "post": {
+        "tags": [
+          "Catálogo (público)"
+        ],
+        "summary": "Clínicas que ofrecen un estudio",
+        "operationId": "clinicas_para_estudio",
+        "description": "Filtra por estado, ciudad, texto o cercanía (`p_lat` y `p_lng` devuelven las más cercanas con `distancia_km`). Trae precio, horario y zona horaria.\n\n**Quién puede llamarla:** público.\n\n**Credenciales con permiso de ejecución:** anon, authenticated, service_role.",
+        "x-roles": "público",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_estudio_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id del estudio."
+                  },
+                  "p_ciudad": {
+                    "type": "string"
+                  },
+                  "p_estado": {
+                    "type": "string",
+                    "description": "Estado."
+                  },
+                  "p_busqueda": {
+                    "type": "string",
+                    "description": "Texto de búsqueda (sin acentos)."
+                  },
+                  "p_lat": {
+                    "type": "number",
+                    "description": "Latitud para ordenar por cercanía."
+                  },
+                  "p_lng": {
+                    "type": "number",
+                    "description": "Longitud para ordenar por cercanía."
+                  },
+                  "p_limite": {
+                    "type": "integer",
+                    "description": "Máximo de resultados.",
+                    "default": "50"
+                  }
+                },
+                "required": [
+                  "p_estudio_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lista de clínicas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cobrar_en_caja": {
+      "post": {
+        "tags": [
+          "Pagos"
+        ],
+        "summary": "Cobrar en caja una cita apartada",
+        "operationId": "cobrar_en_caja",
+        "description": "Usa el pago pendiente o crea uno de caja (`CJ-…`). Deja cita confirmada (o en_clinica), trámite completado y los mismos eventos que un pago en línea. Otra clínica: `42501`.\n\n**Quién puede llamarla:** recepcion (su clínica), supervisor, admin.\n\n**Credenciales con permiso de ejecución:** authenticated.",
+        "x-roles": "recepcion (su clínica), supervisor, admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_cita_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la cita."
+                  },
+                  "p_metodo": {
+                    "type": "string",
+                    "description": "Método de cobro en caja.",
+                    "enum": [
+                      "efectivo",
+                      "tarjeta"
+                    ],
+                    "default": "efectivo"
+                  }
+                },
+                "required": [
+                  "p_cita_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`{pago_id, estado, monto, metodo, cita_id, folio}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CobroCaja"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cola_confirmar": {
+      "post": {
+        "tags": [
+          "Servicio (Edge Functions y workers)"
+        ],
+        "summary": "Confirmar un mensaje de cola",
+        "operationId": "cola_confirmar",
+        "description": "Lo borra de la cola.\n\n**Quién puede llamarla:** servicio.\n\n**Credenciales con permiso de ejecución:** service_role.",
+        "x-roles": "servicio",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_cola": {
+                    "type": "string"
+                  },
+                  "p_msg_id": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "p_cola",
+                  "p_msg_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Booleano.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cola_leer": {
+      "post": {
+        "tags": [
+          "Servicio (Edge Functions y workers)"
+        ],
+        "summary": "Leer mensajes de una cola",
+        "operationId": "cola_leer",
+        "description": "Colas `resumen_tramite`, `recordatorios`, `avisos_whatsapp`.\n\n**Quién puede llamarla:** servicio.\n\n**Credenciales con permiso de ejecución:** service_role.",
+        "x-roles": "servicio",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_cola": {
+                    "type": "string"
+                  },
+                  "p_cantidad": {
+                    "type": "integer",
+                    "default": "10"
+                  },
+                  "p_visibilidad_seg": {
+                    "type": "integer",
+                    "default": "60"
+                  }
+                },
+                "required": [
+                  "p_cola"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mensajes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/comprobante_cita": {
+      "post": {
+        "tags": [
+          "Citas"
+        ],
+        "summary": "Datos del comprobante de pago y cita",
+        "operationId": "comprobante_cita",
+        "description": "Todo lo que lleva el PDF: folio, paciente, estudio, preparación, clínica, fecha en la zona de la clínica y pago con método. Sin identidad verificada: `42501`. Recepción solo de su clínica.\n\n**Quién puede llamarla:** paciente, servicio, personal (identidad verificada).\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "paciente, servicio, personal (identidad verificada)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_cita_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la cita."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id",
+                  "p_cita_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Comprobante (folio, cita, titular, paciente, estudio, clinica, pago).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Comprobante"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No existe (interacción, trámite, cita o pago).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/confirmar_pago": {
+      "post": {
+        "tags": [
+          "Pagos"
+        ],
+        "summary": "Confirmar un pago (pasarela o pago de prueba)",
+        "operationId": "confirmar_pago",
+        "description": "Lo llaman `pagos-webhook` (firma HMAC) y `pago-demo`. Idempotente: pagar dos veces responde igual con `repetido: true`.\n\n**Quién puede llamarla:** servicio.\n\n**Credenciales con permiso de ejecución:** service_role.",
+        "x-roles": "servicio",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_referencia": {
+                    "type": "string",
+                    "description": "Referencia del pago."
+                  },
+                  "p_estado": {
+                    "type": "string",
+                    "description": "Estado."
+                  },
+                  "p_datos": {
+                    "type": "object",
+                    "description": "Datos adicionales (objeto).",
+                    "default": "{}"
+                  }
+                },
+                "required": [
+                  "p_referencia",
+                  "p_estado"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`{estado, repetido?}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/directorio_clinicas": {
+      "post": {
+        "tags": [
+          "Catálogo (público)"
+        ],
+        "summary": "Directorio de las 261 clínicas",
+        "operationId": "directorio_clinicas",
+        "description": "Directorio con teléfono, coordenadas y horario publicado.\n\n**Quién puede llamarla:** público.\n\n**Credenciales con permiso de ejecución:** anon, authenticated, service_role.",
+        "x-roles": "público",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_busqueda": {
+                    "type": "string",
+                    "description": "Texto de búsqueda (sin acentos)."
+                  },
+                  "p_estado": {
+                    "type": "string",
+                    "description": "Estado."
+                  },
+                  "p_ciudad": {
+                    "type": "string"
+                  },
+                  "p_lat": {
+                    "type": "number",
+                    "description": "Latitud para ordenar por cercanía."
+                  },
+                  "p_lng": {
+                    "type": "number",
+                    "description": "Longitud para ordenar por cercanía."
+                  },
+                  "p_limite": {
+                    "type": "integer",
+                    "description": "Máximo de resultados.",
+                    "default": "300"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lista de clínicas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/generar_pago": {
+      "post": {
+        "tags": [
+          "Pagos"
+        ],
+        "summary": "Generar el pago de la cita",
+        "operationId": "generar_pago",
+        "description": "Crea el pago pendiente con referencia y link (`<pago_url_base>/pagar/<referencia>`; nulo si la app aún no está publicada).\n\n**Quién puede llamarla:** paciente, servicio, personal.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "paciente, servicio, personal",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_tramite_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id del trámite."
+                  },
+                  "p_version": {
+                    "type": "integer",
+                    "description": "Versión del trámite que viste. Si otro canal lo cambió: `PT409`."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id",
+                  "p_tramite_id",
+                  "p_version"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pago (pago_id, referencia, monto, moneda, link_pago, expira_en, version).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pago"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/guardar_datos_paciente": {
+      "post": {
+        "tags": [
+          "Datos y verificación"
+        ],
+        "summary": "Registrar o completar los datos del titular",
+        "operationId": "guardar_datos_paciente",
+        "description": "Nombre, apellidos, nacimiento y sexo. Requisito antes del primer trámite.\n\n**Quién puede llamarla:** paciente, servicio, personal verificado.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "paciente, servicio, personal verificado",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_nombre": {
+                    "type": "string"
+                  },
+                  "p_apellido_paterno": {
+                    "type": "string"
+                  },
+                  "p_apellido_materno": {
+                    "type": "string"
+                  },
+                  "p_fecha_nacimiento": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Fecha de nacimiento."
+                  },
+                  "p_sexo": {
+                    "type": "string",
+                    "description": "Sexo.",
+                    "enum": [
+                      "F",
+                      "M",
+                      "X"
+                    ]
+                  }
+                },
+                "required": [
+                  "p_interaccion_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contexto unificado (sesion, paciente, tramite_activo, tramites_abiertos, citas_proximas, linea_tiempo, ...). Lo que trae depende del nivel de verificación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contexto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/guardar_resumen": {
+      "post": {
+        "tags": [
+          "Servicio (Edge Functions y workers)"
+        ],
+        "summary": "Guardar el resumen (cifrado)",
+        "operationId": "guardar_resumen",
+        "description": "Empieza con `[ia]` o `[plantilla]`.\n\n**Quién puede llamarla:** servicio.\n\n**Credenciales con permiso de ejecución:** service_role.",
+        "x-roles": "servicio",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_tramite_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id del trámite."
+                  },
+                  "p_resumen": {
+                    "type": "string"
+                  },
+                  "p_leido_en": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "p_tramite_id",
+                  "p_resumen",
+                  "p_leido_en"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sin cuerpo."
+          },
+          "204": {
+            "description": "Sin cuerpo."
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/horarios_disponibles": {
+      "post": {
+        "tags": [
+          "Catálogo (público)"
+        ],
+        "summary": "Horarios con cupo",
+        "operationId": "horarios_disponibles",
+        "description": "Horas libres por clínica y estudio dentro del horario de atención, sin festivos y con cupo. `p_inmediato` incluye horarios de hoy (mostrador).\n\n**Quién puede llamarla:** público (`p_inmediato` solo recepcion, supervisor, admin).\n\n**Credenciales con permiso de ejecución:** anon, authenticated, service_role.",
+        "x-roles": "público (`p_inmediato` solo recepcion, supervisor, admin)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_clinica_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la clínica."
+                  },
+                  "p_estudio_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id del estudio."
+                  },
+                  "p_desde": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "p_dias": {
+                    "type": "integer",
+                    "default": "7"
+                  },
+                  "p_inmediato": {
+                    "type": "boolean",
+                    "description": "Incluir horarios de hoy (solo mostrador).",
+                    "default": "false"
+                  }
+                },
+                "required": [
+                  "p_clinica_id",
+                  "p_estudio_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lista de horarios (fecha_hora, fecha, hora, disponibles).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/iniciar_contacto": {
+      "post": {
+        "tags": [
+          "Sesión y contexto"
+        ],
+        "summary": "Abrir un contacto por un canal",
+        "operationId": "iniciar_contacto",
+        "description": "Busca o crea al paciente por su celular y abre una interacción. WhatsApp usa `servicio` con `p_agente=ia` y `p_nivel=canal`; call center usa `asesor` (nivel `declarada`); mostrador usa `recepcion` con canal `clinica`. Exige el header `x-sd-telefono` cuando lo llama un servicio.\n\n**Quién puede llamarla:** servicio, asesor, recepcion, supervisor, admin.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "servicio, asesor, recepcion, supervisor, admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_canal": {
+                    "type": "string",
+                    "description": "Canal.",
+                    "enum": [
+                      "web",
+                      "app",
+                      "whatsapp",
+                      "call_center",
+                      "clinica"
+                    ]
+                  },
+                  "p_telefono": {
+                    "type": "string",
+                    "description": "Celular con lada país: 52 y 10 dígitos."
+                  },
+                  "p_agente": {
+                    "type": "string",
+                    "description": "Quién atiende.",
+                    "enum": [
+                      "ia",
+                      "humano"
+                    ]
+                  },
+                  "p_nivel": {
+                    "type": "string",
+                    "description": "Nivel inicial de verificación.",
+                    "enum": [
+                      "declarada",
+                      "canal",
+                      "verificada"
+                    ],
+                    "default": "declarada"
+                  }
+                },
+                "required": [
+                  "p_canal",
+                  "p_telefono",
+                  "p_agente"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contexto unificado (sesion, paciente, tramite_activo, tramites_abiertos, citas_proximas, linea_tiempo, ...). Lo que trae depende del nivel de verificación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contexto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/iniciar_sesion_paciente": {
+      "post": {
+        "tags": [
+          "Sesión y contexto"
+        ],
+        "summary": "Abrir la sesión del paciente (web o app)",
+        "operationId": "iniciar_sesion_paciente",
+        "description": "Crea o retoma la interacción del paciente autenticado. Con sesión anónima el nivel es `canal`; con celular confirmado en Auth, `verificada`.\n\n**Quién puede llamarla:** paciente.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "paciente",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_canal": {
+                    "type": "string",
+                    "description": "Canal.",
+                    "enum": [
+                      "web",
+                      "app",
+                      "whatsapp",
+                      "call_center",
+                      "clinica"
+                    ],
+                    "default": "web"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contexto unificado (sesion, paciente, tramite_activo, tramites_abiertos, citas_proximas, linea_tiempo, ...). Lo que trae depende del nivel de verificación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contexto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/iniciar_tramite": {
+      "post": {
+        "tags": [
+          "Trámite"
+        ],
+        "summary": "Iniciar un trámite de agendar estudio",
+        "operationId": "iniciar_tramite",
+        "description": "El trámite nace con estudio y folio. Pide el registro del titular (nombre, apellido y celular verificado): si falta, `22023 faltan_datos_titular` con `details.faltan`. Evita duplicados (`PT409 tramite_duplicado`).\n\n**Quién puede llamarla:** paciente, servicio, personal.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "paciente, servicio, personal",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_estudio_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id del estudio."
+                  },
+                  "p_beneficiario_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "p_tipo": {
+                    "type": "string",
+                    "default": "agendar_estudio"
+                  }
+                },
+                "required": [
+                  "p_interaccion_id",
+                  "p_estudio_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Trámite creado (id, folio, paso_actual, version).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto: versión, cupo, duplicado, límite de beneficiarios.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journey_paciente": {
+      "post": {
+        "tags": [
+          "Supervisión"
+        ],
+        "summary": "Recorrido completo de un paciente",
+        "operationId": "journey_paciente",
+        "description": "Línea de tiempo con canales, resumen y eventos.\n\n**Quién puede llamarla:** supervisor, admin.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "supervisor, admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_paciente_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "p_limite": {
+                    "type": "integer",
+                    "description": "Máximo de resultados.",
+                    "default": "100"
+                  }
+                },
+                "required": [
+                  "p_paciente_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Journey.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kb_guardar_documento": {
+      "post": {
+        "tags": [
+          "Servicio (Edge Functions y workers)"
+        ],
+        "summary": "Cargar un documento a la base de conocimiento",
+        "operationId": "kb_guardar_documento",
+        "description": "Fragmentos con embedding (pgvector).\n\n**Quién puede llamarla:** servicio, admin.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "servicio, admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_titulo": {
+                    "type": "string"
+                  },
+                  "p_categoria": {
+                    "type": "string",
+                    "description": "Categoría."
+                  },
+                  "p_fuente": {
+                    "type": "string"
+                  },
+                  "p_fragmentos": {
+                    "type": "object"
+                  },
+                  "p_reemplaza": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "p_titulo",
+                  "p_categoria",
+                  "p_fuente",
+                  "p_fragmentos"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Id del documento.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/marcar_atendida": {
+      "post": {
+        "tags": [
+          "Citas"
+        ],
+        "summary": "Marcar la cita como atendida",
+        "operationId": "marcar_atendida",
+        "description": "La cita debe estar `en_clinica`.\n\n**Quién puede llamarla:** recepcion (su clínica), supervisor, admin.\n\n**Credenciales con permiso de ejecución:** authenticated.",
+        "x-roles": "recepcion (su clínica), supervisor, admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_cita_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la cita."
+                  }
+                },
+                "required": [
+                  "p_cita_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`{cita_id, estado: \"atendida\"}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/material_resumen": {
+      "post": {
+        "tags": [
+          "Servicio (Edge Functions y workers)"
+        ],
+        "summary": "Material para el resumen del asesor",
+        "operationId": "material_resumen",
+        "description": "Lo lee `procesar-resumenes`.\n\n**Quién puede llamarla:** servicio.\n\n**Credenciales con permiso de ejecución:** service_role.",
+        "x-roles": "servicio",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_tramite_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id del trámite."
+                  }
+                },
+                "required": [
+                  "p_tramite_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Datos del trámite.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metricas": {
+      "post": {
+        "tags": [
+          "Supervisión"
+        ],
+        "summary": "Métricas por rango de fechas",
+        "operationId": "metricas",
+        "description": "Lee tablas permanentes recalculadas cada 5 minutos: trámites, canales y citas (ingresos = citas pagadas).\n\n**Quién puede llamarla:** supervisor, admin.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "supervisor, admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_desde": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "p_hasta": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "p_clinica_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la clínica."
+                  }
+                },
+                "required": [
+                  "p_desde",
+                  "p_hasta"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Métricas por día.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mis_beneficiarios": {
+      "post": {
+        "tags": [
+          "Trámite"
+        ],
+        "summary": "Familiares registrados",
+        "operationId": "mis_beneficiarios",
+        "description": "Titular y beneficiarios para agendar por otra persona.\n\n**Quién puede llamarla:** paciente, servicio, personal verificado.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "paciente, servicio, personal verificado",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lista de beneficiarios.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/obtener_contexto": {
+      "post": {
+        "tags": [
+          "Sesión y contexto"
+        ],
+        "summary": "Leer el contexto de una interacción",
+        "operationId": "obtener_contexto",
+        "description": "Devuelve lo que la sesión puede ver según su nivel de verificación. Sin verificar, el personal ve solo las citas con folio, fecha y estado.\n\n**Quién puede llamarla:** paciente, servicio, asesor, recepcion, supervisor, admin.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "paciente, servicio, asesor, recepcion, supervisor, admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contexto unificado (sesion, paciente, tramite_activo, tramites_abiertos, citas_proximas, linea_tiempo, ...). Lo que trae depende del nivel de verificación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contexto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pago_del_paciente": {
+      "post": {
+        "tags": [
+          "Pagos"
+        ],
+        "summary": "Consultar un pago por referencia",
+        "operationId": "pago_del_paciente",
+        "description": "Lo usa la pantalla de pago. El personal no lo consulta por aquí.\n\n**Quién puede llamarla:** paciente (solo el suyo), servicio.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "paciente (solo el suyo), servicio",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_referencia": {
+                    "type": "string",
+                    "description": "Referencia del pago."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id",
+                  "p_referencia"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`{referencia, estado, monto, moneda, estudio, folio, expira_en, vencido}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagoDelPaciente"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pagos_pendientes": {
+      "post": {
+        "tags": [
+          "Pagos"
+        ],
+        "summary": "Pagos por pagar del paciente",
+        "operationId": "pagos_pendientes",
+        "description": "Referencia, monto, estudio, para quién y vencimiento.\n\n**Quién puede llamarla:** paciente, servicio.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "paciente, servicio",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lista de pagos por pagar.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "referencia": {
+                        "type": "string"
+                      },
+                      "monto": {
+                        "type": "number"
+                      },
+                      "estudio": {
+                        "type": "string"
+                      },
+                      "etiqueta": {
+                        "type": "string"
+                      },
+                      "folio": {
+                        "type": "string"
+                      },
+                      "fecha_hora": {
+                        "type": "string"
+                      },
+                      "expira_en": {
+                        "type": "string"
+                      },
+                      "link_pago": {
+                        "type": "string",
+                        "nullable": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/procesar_aviso_whatsapp": {
+      "post": {
+        "tags": [
+          "Servicio (Edge Functions y workers)"
+        ],
+        "summary": "Decidir el aviso de WhatsApp de un evento",
+        "operationId": "procesar_aviso_whatsapp",
+        "description": "Solo a teléfonos verificados que aceptaron, con texto en ventana de 24 h o plantilla fuera de ella.\n\n**Quién puede llamarla:** servicio.\n\n**Credenciales con permiso de ejecución:** service_role.",
+        "x-roles": "servicio",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_evento_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "p_paciente_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "p_ocurrido_en": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "p_evento_id",
+                  "p_paciente_id",
+                  "p_ocurrido_en"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Aviso a enviar.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/registrar_codigo_enviado": {
+      "post": {
+        "tags": [
+          "Servicio (Edge Functions y workers)"
+        ],
+        "summary": "Guardar un código enviado (respaldo SMS)",
+        "operationId": "registrar_codigo_enviado",
+        "description": "Cifrado, 10 minutos, un solo uso.\n\n**Quién puede llamarla:** servicio.\n\n**Credenciales con permiso de ejecución:** service_role.",
+        "x-roles": "servicio",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_mensaje_id": {
+                    "type": "string"
+                  },
+                  "p_telefono": {
+                    "type": "string",
+                    "description": "Celular con lada país: 52 y 10 dígitos."
+                  },
+                  "p_codigo": {
+                    "type": "string",
+                    "description": "Código de 6 dígitos."
+                  }
+                },
+                "required": [
+                  "p_mensaje_id",
+                  "p_telefono",
+                  "p_codigo"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sin cuerpo."
+          },
+          "204": {
+            "description": "Sin cuerpo."
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/registrar_consentimiento_avisos": {
+      "post": {
+        "tags": [
+          "Sesión y contexto"
+        ],
+        "summary": "Aceptar o rechazar avisos por WhatsApp",
+        "operationId": "registrar_consentimiento_avisos",
+        "description": "Sin consentimiento no se envían avisos proactivos. Requiere teléfono verificado.\n\n**Quién puede llamarla:** paciente, servicio.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "paciente, servicio",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_acepta": {
+                    "type": "boolean",
+                    "description": "Acepta avisos por WhatsApp."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id",
+                  "p_acepta"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Estado del consentimiento.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/registrar_llegada": {
+      "post": {
+        "tags": [
+          "Personal (asesor y recepción)"
+        ],
+        "summary": "Registrar la llegada del paciente",
+        "operationId": "registrar_llegada",
+        "description": "Identificación de quien recibe el estudio, preparación cumplida, turno por área y a dónde ir (caja si no ha pagado). La cita pasa a `en_clinica`.\n\n**Quién puede llamarla:** recepcion (su clínica), supervisor, admin.\n\n**Credenciales con permiso de ejecución:** authenticated.",
+        "x-roles": "recepcion (su clínica), supervisor, admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_cita_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la cita."
+                  },
+                  "p_tipo_documento": {
+                    "type": "string",
+                    "description": "Tipo de identificación.",
+                    "enum": [
+                      "ine",
+                      "pasaporte",
+                      "licencia",
+                      "cedula_profesional",
+                      "cartilla_militar",
+                      "acta_nacimiento",
+                      "curp",
+                      "otro"
+                    ]
+                  },
+                  "p_cumplio_preparacion": {
+                    "type": "boolean",
+                    "description": "El paciente cumplió la preparación."
+                  }
+                },
+                "required": [
+                  "p_cita_id",
+                  "p_tipo_documento"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Llegada (turno, área, pago).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/registrar_mensaje": {
+      "post": {
+        "tags": [
+          "Sesión y contexto"
+        ],
+        "summary": "Guardar un mensaje de la conversación",
+        "operationId": "registrar_mensaje",
+        "description": "Guarda el mensaje cifrado. Los mensajes entrantes de WhatsApp tienen un tope de 10 por minuto por teléfono (`PT429 demasiados_mensajes`).\n\n**Quién puede llamarla:** servicio, paciente, personal.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "servicio, paciente, personal",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_direccion": {
+                    "type": "string",
+                    "description": "Dirección del mensaje.",
+                    "enum": [
+                      "entrante",
+                      "saliente"
+                    ]
+                  },
+                  "p_autor": {
+                    "type": "string",
+                    "description": "Quién lo escribió.",
+                    "enum": [
+                      "paciente",
+                      "agente_ia",
+                      "asesor",
+                      "sistema"
+                    ]
+                  },
+                  "p_contenido": {
+                    "type": "string"
+                  },
+                  "p_metadatos": {
+                    "type": "object",
+                    "default": "{}"
+                  }
+                },
+                "required": [
+                  "p_interaccion_id",
+                  "p_direccion",
+                  "p_autor",
+                  "p_contenido"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Id del mensaje (uuid).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reprogramar_cita": {
+      "post": {
+        "tags": [
+          "Citas"
+        ],
+        "summary": "Cambiar fecha u hora",
+        "operationId": "reprogramar_cita",
+        "description": "Misma clínica y estudio. Al menos 1 hora de anticipación, dentro del horario de atención, con cupo y distinto del actual. Solo citas reservada o confirmada y futuras.\n\n**Quién puede llamarla:** paciente, servicio, asesor, recepcion.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "paciente, servicio, asesor, recepcion",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_cita_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la cita."
+                  },
+                  "p_fecha_hora": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Fecha y hora con zona (ISO 8601). Usa un `fecha_hora` de `horarios_disponibles`."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id",
+                  "p_cita_id",
+                  "p_fecha_hora"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`{cita_id, estado, fecha_hora, folio}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto: versión, cupo, duplicado, límite de beneficiarios.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reservar_cita": {
+      "post": {
+        "tags": [
+          "Citas"
+        ],
+        "summary": "Reservar una cita",
+        "operationId": "reservar_cita",
+        "description": "Valida horario de atención, cupo (`PT409 horario_sin_cupo`) y duplicados (`PT409 cita_duplicada`). Con más de 5 citas futuras responde HTTP 409 con `{\"error\":\"limite_citas\"}` y guarda el evento.\n\n**Quién puede llamarla:** paciente, servicio, personal.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "paciente, servicio, personal",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_tramite_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id del trámite."
+                  },
+                  "p_version": {
+                    "type": "integer",
+                    "description": "Versión del trámite que viste. Si otro canal lo cambió: `PT409`."
+                  },
+                  "p_fecha_hora": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Fecha y hora con zona (ISO 8601). Usa un `fecha_hora` de `horarios_disponibles`."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id",
+                  "p_tramite_id",
+                  "p_version",
+                  "p_fecha_hora"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Trámite con la cita y la nueva version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto: versión, cupo, duplicado, límite de beneficiarios.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "`tramite_en_atencion`: el personal tiene el trámite; se puede ver pero no cambiar.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resolver_codigo_enviado": {
+      "post": {
+        "tags": [
+          "Servicio (Edge Functions y workers)"
+        ],
+        "summary": "Resolver el estado de un código enviado",
+        "operationId": "resolver_codigo_enviado",
+        "description": "Si Meta avisa que falló, devuelve el código una sola vez para mandarlo por SMS.\n\n**Quién puede llamarla:** servicio.\n\n**Credenciales con permiso de ejecución:** service_role.",
+        "x-roles": "servicio",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_mensaje_id": {
+                    "type": "string"
+                  },
+                  "p_entregado": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "p_mensaje_id",
+                  "p_entregado"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Estado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/retomar_tramite": {
+      "post": {
+        "tags": [
+          "Trámite"
+        ],
+        "summary": "Retomar un trámite pendiente",
+        "operationId": "retomar_tramite",
+        "description": "La sesión trabaja con este trámite. Si lo hace personal, queda bloqueado 10 minutos para otros canales.\n\n**Quién puede llamarla:** dueño de la interacción.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "dueño de la interacción",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_tramite_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id del trámite."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id",
+                  "p_tramite_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contexto unificado (sesion, paciente, tramite_activo, tramites_abiertos, citas_proximas, linea_tiempo, ...). Lo que trae depende del nivel de verificación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contexto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/solicitar_agente": {
+      "post": {
+        "tags": [
+          "Personal (asesor y recepción)"
+        ],
+        "summary": "Pedir una persona (sin interfaz hoy)",
+        "operationId": "solicitar_agente",
+        "description": "Registra el evento `agente_solicitado`. La interfaz ya no lo ofrece.\n\n**Quién puede llamarla:** dueño de la interacción.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "dueño de la interacción",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_motivo": {
+                    "type": "string",
+                    "description": "Motivo, opcional."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`{solicitado, mensaje}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/solicitar_otp": {
+      "post": {
+        "tags": [
+          "Servicio (Edge Functions y workers)"
+        ],
+        "summary": "Generar el OTP que se manda al paciente",
+        "operationId": "solicitar_otp",
+        "description": "Lo usa `enviar-otp`. Va al teléfono de mayor confianza. 3 por paciente cada 10 min.\n\n**Quién puede llamarla:** servicio.\n\n**Credenciales con permiso de ejecución:** service_role.",
+        "x-roles": "servicio",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Código y destino.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/solicitudes_agente": {
+      "post": {
+        "tags": [
+          "Personal (asesor y recepción)"
+        ],
+        "summary": "Solicitudes de agente sin atender",
+        "operationId": "solicitudes_agente",
+        "description": "Últimas 12 horas.\n\n**Quién puede llamarla:** asesor, supervisor, admin.\n\n**Credenciales con permiso de ejecución:** authenticated.",
+        "x-roles": "asesor, supervisor, admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_limite": {
+                    "type": "integer",
+                    "description": "Máximo de resultados.",
+                    "default": "30"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lista de solicitudes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/texto_asesor_atendiendo": {
+      "post": {
+        "tags": [
+          "Servicio (Edge Functions y workers)"
+        ],
+        "summary": "Texto cuando un asesor tiene el trámite",
+        "operationId": "texto_asesor_atendiendo",
+        "description": "Para responder `PT423` en WhatsApp.\n\n**Quién puede llamarla:** servicio.\n\n**Credenciales con permiso de ejecución:** service_role.",
+        "x-roles": "servicio",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_tramite_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id del trámite."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id",
+                  "p_tramite_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Texto.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tramites_en_curso": {
+      "post": {
+        "tags": [
+          "Supervisión"
+        ],
+        "summary": "Trámites abiertos",
+        "operationId": "tramites_en_curso",
+        "description": "Filtros por clínica y paso.\n\n**Quién puede llamarla:** supervisor, admin.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "supervisor, admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_clinica_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la clínica."
+                  },
+                  "p_paso": {
+                    "type": "string"
+                  },
+                  "p_limite": {
+                    "type": "integer",
+                    "description": "Máximo de resultados.",
+                    "default": "50"
+                  },
+                  "p_antes_de": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lista de trámites.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ubicaciones_clinicas": {
+      "post": {
+        "tags": [
+          "Catálogo (público)"
+        ],
+        "summary": "Estados y ciudades con clínicas",
+        "operationId": "ubicaciones_clinicas",
+        "description": "Para el selector «primero dónde, luego cuál».\n\n**Quién puede llamarla:** público.\n\n**Credenciales con permiso de ejecución:** anon, authenticated, service_role.",
+        "x-roles": "público",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_estudio_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id del estudio."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Estados con sus ciudades y conteos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/validar_otp": {
+      "post": {
+        "tags": [
+          "Datos y verificación"
+        ],
+        "summary": "Validar el código que el paciente dicta",
+        "operationId": "validar_otp",
+        "description": "Sube la sesión a `verificada`.\n\n**Quién puede llamarla:** asesor, recepcion, servicio.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "asesor, recepcion, servicio",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_codigo": {
+                    "type": "string",
+                    "description": "Código de 6 dígitos."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id",
+                  "p_codigo"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contexto unificado (sesion, paciente, tramite_activo, tramites_abiertos, citas_proximas, linea_tiempo, ...). Lo que trae depende del nivel de verificación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contexto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/verificar_identidad": {
+      "post": {
+        "tags": [
+          "Datos y verificación"
+        ],
+        "summary": "Verificar con fecha de nacimiento",
+        "operationId": "verificar_identidad",
+        "description": "Da nivel `canal`, nunca `verificada`. 3 intentos fallidos cada 15 min bloquean temporalmente (`PT429`).\n\n**Quién puede llamarla:** paciente, servicio.\n\n**Credenciales con permiso de ejecución:** authenticated, service_role.",
+        "x-roles": "paciente, servicio",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  },
+                  "p_fecha_nacimiento": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Fecha de nacimiento."
+                  }
+                },
+                "required": [
+                  "p_interaccion_id",
+                  "p_fecha_nacimiento"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contexto unificado (sesion, paciente, tramite_activo, tramites_abiertos, citas_proximas, linea_tiempo, ...). Lo que trae depende del nivel de verificación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contexto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dato inválido (incluye `horario_fuera_de_atencion` y `faltan_datos_titular`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/verificar_presencial": {
+      "post": {
+        "tags": [
+          "Datos y verificación"
+        ],
+        "summary": "Verificar con la identificación en mostrador",
+        "operationId": "verificar_presencial",
+        "description": "Con `p_interaccion_id` y `p_tipo_documento` verifica esa sesión. Con `p_cita_id` verifica al beneficiario de la cita.\n\n**Quién puede llamarla:** recepcion, asesor, supervisor, admin.\n\n**Credenciales con permiso de ejecución:** authenticated.",
+        "x-roles": "recepcion, asesor, supervisor, admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContentProfile"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "p_cita_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la cita."
+                  },
+                  "p_tipo_documento": {
+                    "type": "string",
+                    "description": "Tipo de identificación.",
+                    "enum": [
+                      "ine",
+                      "pasaporte",
+                      "licencia",
+                      "cedula_profesional",
+                      "cartilla_militar",
+                      "acta_nacimiento",
+                      "curp",
+                      "otro"
+                    ]
+                  },
+                  "p_interaccion_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id de la interacción: `sesion.interaccion_id` del contexto."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contexto unificado (sesion, paciente, tramite_activo, tramites_abiertos, citas_proximas, linea_tiempo, ...). Lo que trae depende del nivel de verificación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contexto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso: rol, nivel de verificación o alcance de clínica insuficientes (401 si no hay sesión).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes o `demasiados_mensajes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apikey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "apikey",
+        "description": "Clave publishable (`sb_publishable_…`)."
+      },
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT del usuario (Supabase Auth) o la clave de servicio en servidores."
+      }
+    },
+    "parameters": {
+      "ContentProfile": {
+        "name": "Content-Profile",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "enum": [
+            "api"
+          ],
+          "default": "api"
+        },
+        "description": "Esquema expuesto. supabase-js lo agrega con `db.schema`."
+      }
+    },
+    "schemas": {
+      "Contexto": {
+        "type": "object",
+        "properties": {
+          "sesion": {
+            "type": "object",
+            "properties": {
+              "interaccion_id": {
+                "type": "string",
+                "example": "0192…",
+                "format": "uuid"
+              },
+              "canal": {
+                "type": "string",
+                "example": "web"
+              },
+              "nivel_verificacion": {
+                "type": "string",
+                "example": "verificada",
+                "enum": [
+                  "declarada",
+                  "canal",
+                  "verificada"
+                ]
+              },
+              "requiere_verificacion": {
+                "type": "boolean"
+              },
+              "requiere_registro": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Vacío = registro completo"
+              }
+            }
+          },
+          "paciente": {
+            "type": "object",
+            "properties": {
+              "nombre": {
+                "type": "string",
+                "example": "Ana Pérez"
+              },
+              "nombre_mostrar": {
+                "type": "string"
+              },
+              "telefono": {
+                "type": "string",
+                "example": "+52 866 123 4567"
+              }
+            }
+          },
+          "tramite_activo": {
+            "type": "object",
+            "nullable": true,
+            "description": "El trámite con el que trabaja esta sesión: id, folio, paso_actual, version, estudio, clinica, beneficiario, resumen."
+          },
+          "tramites_abiertos": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Todos los trámites abiertos, recientes primero."
+          },
+          "citas_proximas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CitaProxima"
+            },
+            "description": "Sin verificar solo trae id, folio, fecha_hora y estado."
+          },
+          "pagos_pendientes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "monto": {
+                  "type": "number",
+                  "example": 450
+                },
+                "link_pago": {
+                  "type": "string"
+                },
+                "expira_en": {
+                  "type": "string"
+                },
+                "folio": {
+                  "type": "string",
+                  "example": "SD-4K7Q"
+                }
+              }
+            }
+          },
+          "linea_tiempo": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "mensajes_recientes": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "CitaProxima": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "0192…",
+            "format": "uuid"
+          },
+          "folio": {
+            "type": "string",
+            "example": "SD-4K7Q"
+          },
+          "fecha_hora": {
+            "type": "string",
+            "example": "2026-11-27T16:30:00Z"
+          },
+          "estado": {
+            "type": "string",
+            "example": "confirmada",
+            "enum": [
+              "reservada",
+              "confirmada",
+              "en_clinica"
+            ]
+          },
+          "estudio": {
+            "type": "string",
+            "example": "Biometría hemática"
+          },
+          "clinica": {
+            "type": "string",
+            "example": "Puebla Centro"
+          },
+          "precio": {
+            "type": "number",
+            "example": 450
+          },
+          "clinica_id": {
+            "type": "string"
+          },
+          "estudio_id": {
+            "type": "string"
+          },
+          "pagada": {
+            "type": "boolean"
+          },
+          "turno": {
+            "type": "string",
+            "example": "U-001"
+          },
+          "area": {
+            "type": "string",
+            "example": "Laboratorio"
+          },
+          "beneficiario": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "nombre": {
+                "type": "string",
+                "example": "Luis"
+              },
+              "relacion": {
+                "type": "string",
+                "example": "hijo"
+              }
+            }
+          }
+        }
+      },
+      "Pago": {
+        "type": "object",
+        "properties": {
+          "pago_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "referencia": {
+            "type": "string",
+            "example": "PD-9F3A2B"
+          },
+          "monto": {
+            "type": "number",
+            "example": 450
+          },
+          "moneda": {
+            "type": "string",
+            "example": "MXN"
+          },
+          "link_pago": {
+            "type": "string",
+            "example": "https://app/pagar/PD-9F3A2B",
+            "nullable": true
+          },
+          "expira_en": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "CobroCaja": {
+        "type": "object",
+        "properties": {
+          "pago_id": {
+            "type": "string"
+          },
+          "estado": {
+            "type": "string",
+            "example": "pagado"
+          },
+          "monto": {
+            "type": "number",
+            "example": 450
+          },
+          "metodo": {
+            "type": "string",
+            "example": "efectivo",
+            "enum": [
+              "efectivo",
+              "tarjeta"
+            ]
+          },
+          "cita_id": {
+            "type": "string"
+          },
+          "folio": {
+            "type": "string",
+            "example": "SD-4K7Q"
+          }
+        }
+      },
+      "CitaCancelada": {
+        "type": "object",
+        "properties": {
+          "cita_id": {
+            "type": "string"
+          },
+          "estado": {
+            "type": "string",
+            "example": "cancelada"
+          },
+          "reembolso": {
+            "type": "boolean"
+          },
+          "folio": {
+            "type": "string",
+            "example": "SD-4K7Q"
+          }
+        }
+      },
+      "PagoDelPaciente": {
+        "type": "object",
+        "properties": {
+          "referencia": {
+            "type": "string",
+            "example": "PD-9F3A2B"
+          },
+          "estado": {
+            "type": "string",
+            "example": "pendiente"
+          },
+          "monto": {
+            "type": "number",
+            "example": 450
+          },
+          "moneda": {
+            "type": "string",
+            "example": "MXN"
+          },
+          "estudio": {
+            "type": "string"
+          },
+          "folio": {
+            "type": "string"
+          },
+          "expira_en": {
+            "type": "string"
+          },
+          "vencido": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Comprobante": {
+        "type": "object",
+        "properties": {
+          "folio": {
+            "type": "string",
+            "example": "SD-4K7Q"
+          },
+          "emitido_en": {
+            "type": "string"
+          },
+          "titular": {
+            "type": "string",
+            "example": "Ana Pérez López"
+          },
+          "paciente": {
+            "type": "object",
+            "properties": {
+              "nombre": {
+                "type": "string",
+                "example": "Luis Pérez Ruiz"
+              },
+              "relacion": {
+                "type": "string",
+                "example": "hijo"
+              }
+            }
+          },
+          "cita": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "estado": {
+                "type": "string",
+                "example": "confirmada"
+              },
+              "fecha_hora": {
+                "type": "string",
+                "example": "2026-11-27T16:30:00Z"
+              },
+              "turno": {
+                "type": "string",
+                "nullable": true
+              },
+              "precio": {
+                "type": "number",
+                "example": 450
+              }
+            }
+          },
+          "estudio": {
+            "type": "object",
+            "properties": {
+              "nombre": {
+                "type": "string",
+                "example": "Biometría hemática"
+              },
+              "preparacion": {
+                "type": "string",
+                "example": "Ayuno de 8 horas",
+                "nullable": true
+              },
+              "duracion_min": {
+                "type": "integer",
+                "example": 15
+              },
+              "area": {
+                "type": "string",
+                "example": "Laboratorio"
+              }
+            }
+          },
+          "clinica": {
+            "type": "object",
+            "properties": {
+              "nombre": {
+                "type": "string",
+                "example": "Puebla Centro"
+              },
+              "direccion": {
+                "type": "string"
+              },
+              "ciudad": {
+                "type": "string",
+                "example": "Puebla"
+              },
+              "estado": {
+                "type": "string",
+                "example": "Puebla"
+              },
+              "telefono": {
+                "type": "string"
+              },
+              "zona_horaria": {
+                "type": "string",
+                "example": "America/Mexico_City"
+              }
+            }
+          },
+          "pago": {
+            "type": "object",
+            "properties": {
+              "referencia": {
+                "type": "string",
+                "example": "CJ-A1B2C3D4E5F6"
+              },
+              "estado": {
+                "type": "string",
+                "example": "pagado",
+                "enum": [
+                  "pendiente",
+                  "pagado",
+                  "fallido",
+                  "expirado",
+                  "reembolsado"
+                ]
+              },
+              "monto": {
+                "type": "number",
+                "example": 450
+              },
+              "moneda": {
+                "type": "string",
+                "example": "MXN"
+              },
+              "pagado_en": {
+                "type": "string"
+              },
+              "metodo": {
+                "type": "string",
+                "example": "efectivo",
+                "enum": [
+                  "efectivo",
+                  "tarjeta",
+                  "en_linea",
+                  "en_linea_prueba"
+                ],
+                "nullable": true
+              },
+              "en_caja": {
+                "type": "boolean"
+              },
+              "simulado": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "PT409",
+            "description": "42501, PT404, 22023, P0001, PT409, PT423, PT429, PT405"
+          },
+          "message": {
+            "type": "string",
+            "example": "horario_sin_cupo"
+          },
+          "details": {
+            "type": "string",
+            "nullable": true
+          },
+          "hint": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      }
+    }
+  }
+}

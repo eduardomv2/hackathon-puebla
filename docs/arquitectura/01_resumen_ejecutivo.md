@@ -43,7 +43,7 @@ flowchart LR
 
 | Elemento | Cantidad |
 |---|---|
-| Funciones de la API pública (`api.*`) | 57 |
+| Funciones de la API pública (`api.*`) | 50 |
 | Migraciones aplicadas | 38 |
 | Pruebas automáticas de base de datos (pgTAP) | 403 en 31 archivos |
 | Edge Functions (servidor) | 8 (webhook de WhatsApp, avisos, recordatorios, pagos, OTP, resúmenes, código de Auth, pago de prueba) |

@@ -55,7 +55,7 @@
 | Pieza usada | Qué resolvió |
 |---|---|
 | PostgreSQL 17 | Transacciones, restricciones, particiones, funciones en PL/pgSQL |
-| PostgREST | 57 funciones convertidas en endpoints sin escribir un servidor |
+| PostgREST | 50 funciones convertidas en endpoints sin escribir un servidor |
 | Auth + Send SMS Hook | OTP por WhatsApp (con SMS de respaldo) sin proveedor de SMS obligatorio |
 | Realtime Broadcast privado | Línea de tiempo en vivo con autorización por RLS |
 | `pgmq` + `pg_cron` + `pg_net` | Resúmenes, avisos, recordatorios y expiraciones dentro de la propia base |
