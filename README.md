@@ -74,6 +74,9 @@ solo para el simulador local (ver [Simulador](#esquema-simulador-solo-pruebas)).
 
 ## Conectarse al proyecto en línea (equipo)
 
+> **¿Vas a construir o validar la app/PWA del paciente o las consolas del personal?** Lee primero
+> [`docs/GUIA_APP_PWA.md`](docs/GUIA_APP_PWA.md): flujo completo por rol, llamadas, errores y checklist de pruebas.
+
 Proyecto de Supabase **hackathon-omnicanal** (plan gratis, us-east-1). Las apps se conectan así:
 
 ```ts
