@@ -3,6 +3,9 @@
 Base de datos y API del "cerebro" que une web, app, WhatsApp y call center en un solo
 trámite por paciente. Corre en Supabase (PostgreSQL 17).
 
+> **Documentación de arquitectura** (resumen, diagramas, modelo de datos, conexión omnicanal, seguridad,
+> escalabilidad, comparación con otras plataformas y decisiones): [`docs/arquitectura/`](docs/arquitectura/README.md).
+
 ## Estructura
 
 ```
