@@ -8,15 +8,14 @@
 // Aquí solo se entrega: bandeja simulada en MODO_SIMULADOR, WhatsApp real (TODO) si no.
 import { clienteServicio, rpc } from '../_shared/supabase.ts'
 import { enviarAlPaciente } from '../_shared/enviar.ts'
-import { json, respuestaDeError } from '../_shared/http.ts'
+import { json, respuestaDeError, esLlamadaInterna } from '../_shared/http.ts'
 
 type MensajeCola = { msg_id: number; intento: number; mensaje: { evento_id: string; paciente_id: string; ocurrido_en: string } }
 type Aviso = { enviar: boolean; motivo?: string; telefono?: string; tipo?: 'texto' | 'plantilla'; plantilla?: string; texto?: string }
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ code: 'PT405', message: 'Usa POST' }, 405)
-  const token = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '')
-  if (!token || token !== Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) {
+  if (!esLlamadaInterna(req)) {
     return json({ code: '42501', message: 'Solo el despachador interno puede invocar esta función' }, 401)
   }
 

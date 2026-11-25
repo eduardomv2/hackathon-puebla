@@ -8,15 +8,14 @@
 //   guardado empieza con "[ia]" o "[plantilla]" para que la UI lo muestre.
 //   El resumen se guarda cifrado y lo ven la consola del asesor y el journey del panel.
 import { clienteServicio, rpc } from '../_shared/supabase.ts'
-import { json, respuestaDeError } from '../_shared/http.ts'
+import { json, respuestaDeError, esLlamadaInterna } from '../_shared/http.ts'
 import { resumir } from './resumen.ts'
 
 type MensajeCola = { msg_id: number; intento: number; mensaje: { tramite_id: string; paciente_id: string } }
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ code: 'PT405', message: 'Usa POST' }, 405)
-  const token = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '')
-  if (!token || token !== Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) {
+  if (!esLlamadaInterna(req)) {
     return json({ code: '42501', message: 'Solo el despachador interno puede invocar esta función' }, 401)
   }
 

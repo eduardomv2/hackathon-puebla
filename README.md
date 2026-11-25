@@ -66,6 +66,30 @@ lógica interna, `audit` la bitácora inmutable y `particiones` las particiones 
 sesión (`anon`, `authenticated`, `service_role`) puede leer tablas directamente. `simulador` existe
 solo para el simulador local (ver [Simulador](#esquema-simulador-solo-pruebas)).
 
+## Conectarse al proyecto en línea (equipo)
+
+Proyecto de Supabase **hackathon-omnicanal** (plan gratis, us-east-1). Las apps se conectan así:
+
+```ts
+import { createClient } from '@supabase/supabase-js'
+const supabase = createClient(
+  'https://bdkjkmynxaphqcnapmjk.supabase.co',
+  'sb_publishable_wrZ4EDTapWIzEm9WMowSSg_GG653EUj',      // clave publishable: es pública, va en la app
+  { db: { schema: 'api' } },                  // todo es RPC POST: supabase.rpc('catalogo_estudios')
+)
+```
+
+- Solo se expone el esquema `api` (ver "Roles y vistas" y la tabla de funciones). Las tablas no se leen directo.
+- **Pacientes**: `signInAnonymously()` para catálogo y clínicas; para agendar, verificar el celular con
+  `updateUser({ phone })` + `verifyOtp({ type: 'phone_change' })`. El código llega por WhatsApp.
+  Para pruebas: **866 123 4567 a 866 123 4571 (52 + 10 dígitos) con código fijo `123456`** (vigentes hasta
+  el 31/01/2027). Con el número de prueba de Meta, el WhatsApp real solo llega a los celulares registrados
+  en la app de Meta.
+- **Personal**: `asesor@demo.mx`, `recepcion@demo.mx` y `clinica@demo.mx` (Puebla centro, `PUE-CEN`),
+  `admin@demo.mx`. La contraseña **no** es `demo1234`: pídesela a Eduardo (no va en el repositorio).
+- Datos: 261 clínicas reales con horarios, 6 estudios de ejemplo. El simulador está apagado.
+- Nunca uses la clave secreta (`sb_secret_…` / service_role) en una app: solo va en Edge Functions.
+
 ## Instalar en Supabase
 
 1. Crear la llave de cifrado de columnas **antes** de aplicar las migraciones
@@ -92,10 +116,15 @@ solo para el simulador local (ver [Simulador](#esquema-simulador-solo-pruebas)).
    - Cargar el catálogo real (`core.estudios`, `core.clinica_estudios`) y los festivos (`core.dias_inhabiles`).
      Las clínicas y sus **horarios de atención** se pueden cargar con `supabase/seeds/clinicas.sql`
      (no trae nada ficticio ni enciende nada). Sin horarios, una clínica no ofrece horarios ni acepta reservas.
-3. Guardar los secretos que usa el despachador de workers (SQL Editor):
+3. Guardar los secretos que usa la base para llamar a las Edge Functions (workers y hook del código).
+   `worker_token` es un secreto aleatorio propio (no la clave de Supabase): el **mismo valor** va en Vault
+   y en el secreto `WORKER_TOKEN` de las funciones (en local, sin `WORKER_TOKEN`, se usa la clave de servicio):
    ```sql
    select vault.create_secret('https://<ref>.supabase.co', 'project_url');
-   select vault.create_secret('<clave secreta del proyecto>', 'worker_token');
+   select vault.create_secret('<secreto aleatorio>', 'worker_token');
+   ```
+   ```bash
+   supabase secrets set WORKER_TOKEN=<el mismo secreto>
    ```
 4. Dashboard → Settings → Data API → **Exposed schemas**: dejar solo `api` (nunca `simulador`).
 5. Dashboard → Authentication:
@@ -117,6 +146,7 @@ solo para el simulador local (ver [Simulador](#esquema-simulador-solo-pruebas)).
    | `WHATSAPP_APP_SECRET` | whatsapp-webhook | Verificar la firma `X-Hub-Signature-256` de Meta |
    | `WHATSAPP_VERIFY_TOKEN` | whatsapp-webhook | Verificación GET al registrar el webhook en Meta |
    | `PAGOS_WEBHOOK_SECRET` | pagos-webhook | Verificar el header `x-firma` (HMAC-SHA256 del cuerpo) |
+   | `WORKER_TOKEN` | avisos-whatsapp, procesar-resumenes, enviar-codigo-auth | Igual a `worker_token` de Vault: solo la base puede invocarlas |
    | `WHATSAPP_TOKEN` | todas las que envían | Token de acceso de WhatsApp Cloud API (usuario del sistema de Meta Business) |
    | `WHATSAPP_PHONE_NUMBER_ID` | todas las que envían | Id del número que envía (en Meta → WhatsApp → API Setup) |
    | `WHATSAPP_PLANTILLA_OTP` | enviar-codigo-auth, enviar-otp | Nombre de la plantilla de **Autenticación** aprobada (botón "Copiar código") |

@@ -17,7 +17,8 @@ import { fileURLToPath } from 'node:url'
 import { createClient } from '@supabase/supabase-js'
 import postgres from 'postgres'
 
-const CONTRASENA = 'demo1234' // Auth exige al menos 6 caracteres
+// Auth exige al menos 6 caracteres. En supabase.com usa otra: CONTRASENA=… npm run usuarios
+const CONTRASENA = process.env.CONTRASENA || 'demo1234'
 
 const PERSONAL = [
   { email: 'asesor@demo.mx', nombre: 'Asesora Demo (call center)', rol: 'asesor', clinica: null },
@@ -76,7 +77,7 @@ async function main() {
     }
 
     // Comprobación: cada usuario inicia sesión y su JWT trae el rol
-    console.log('\nPersonal de prueba (contraseña: %s)\n', CONTRASENA)
+    console.log('\nPersonal de prueba (contraseña: %s)\n', process.env.CONTRASENA ? 'la de CONTRASENA' : CONTRASENA)
     for (const p of PERSONAL) {
       const cliente = createClient(cfg.API_URL, cfg.ANON_KEY, { auth: { persistSession: false } })
       const { data, error } = await cliente.auth.signInWithPassword({ email: p.email, password: CONTRASENA })

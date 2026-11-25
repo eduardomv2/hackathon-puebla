@@ -7,12 +7,11 @@
 //   · producción: WhatsApp (plantilla de autenticación) y, si no se entrega, SMS (CANAL_CODIGO,
 //     ver _shared/enviar.ts).
 import { enviarCodigo } from '../_shared/enviar.ts'
-import { json } from '../_shared/http.ts'
+import { json, esLlamadaInterna } from '../_shared/http.ts'
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ code: 'PT405', message: 'Usa POST' }, 405)
-  const token = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '')
-  if (!token || token !== Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) {
+  if (!esLlamadaInterna(req)) {
     return json({ code: '42501', message: 'Solo la base puede invocar esta función' }, 401)
   }
   const { telefono, codigo } = await req.json().catch(() => ({}))

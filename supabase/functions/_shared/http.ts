@@ -38,3 +38,17 @@ export async function firmaValida(secreto: string, cuerpo: string, firmaHex: str
   for (let i = 0; i < esperada.length; i++) dif |= esperada.charCodeAt(i) ^ firmaHex.charCodeAt(i)
   return dif === 0
 }
+
+/**
+ * ¿La llamada viene de la base (pg_net: despachador de workers o hook de Auth)?
+ * La base manda el worker_token de Vault. Se compara con WORKER_TOKEN (secreto de las Edge
+ * Functions, el mismo valor que en Vault); si no está definido (local), con la clave de servicio.
+ */
+export function esLlamadaInterna(req: Request): boolean {
+  const token = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') ?? ''
+  const esperado = Deno.env.get('WORKER_TOKEN') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+  if (!token || !esperado || token.length !== esperado.length) return false
+  let dif = 0
+  for (let i = 0; i < token.length; i++) dif |= token.charCodeAt(i) ^ esperado.charCodeAt(i)
+  return dif === 0
+}
