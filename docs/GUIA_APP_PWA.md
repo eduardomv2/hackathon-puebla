@@ -122,7 +122,7 @@ const { data: ctx2 } = await supabase.rpc('iniciar_sesion_paciente', { p_canal: 
 - **Números de prueba con código fijo `123456`** (no mandan nada, no necesitan chat abierto):
   `+528661234567`, `+528661234568`, `+528661234569`, `+528661234570`, `+528661234571`. Vigentes hasta 31/01/2027.
 - **WhatsApp real:** el número de prueba de Meta **solo entrega a los celulares registrados en la app de Meta**
-  (tres del equipo: ver con Eduardo) y solo si ese celular **escribió antes** al número de prueba de Meta
+  (tres celulares del equipo: están en `docs/CREDENCIALES_EQUIPO.md`, que Eduardo te pasa en privado) y solo si ese celular **escribió antes** al número de prueba de Meta
   (+1 555 138 0373) en las últimas 24 h. Si el código no llega: escribir "hola" a ese número y reintentar.
 - Si dos sesiones anónimas esperan el mismo número, solo la última recibe el código (es esperado).
 - Pon un temporizador de reenvío (~60 s) y un máximo de intentos en pantalla: Supabase Auth limita los envíos de código y responde con error de límite si se abusa.
@@ -280,7 +280,7 @@ pídele verificar. Nunca muestres datos que el contexto no trae: el servidor ya 
 - Pacientes con código fijo `123456`: `+528661234567` … `+528661234571`. Están **sin registros**: créalos desde la
   app con nombres reales. (Si necesitan borrar los de prueba, pídelo a Eduardo.)
 - Personal: `asesor@demo.mx`, `recepcion@demo.mx` (clínica **Puebla**, `PUE-CEN`), `clinica@demo.mx`
-  (supervisión, Puebla), `admin@demo.mx`. **La contraseña la da Eduardo** (no está en el repo).
+  (supervisión, Puebla), `admin@demo.mx`. **Las contraseñas y los celulares de WhatsApp están en `docs/CREDENCIALES_EQUIPO.md`** (no está en el repo: Eduardo te lo pasa en privado).
 - Para probar de punta a punta con WhatsApp: ver la sección 3.3 (celulares registrados en Meta).
 
 ## 6. Errores: cómo reconocerlos y qué mostrar

@@ -22,3 +22,6 @@ supabase/.branches/
 *.sw?
 # Solo URL y clave publishable (públicas) del proyecto en línea
 !simulador/.env.produccion
+
+# Credenciales de pruebas del equipo (se pasan en privado)
+docs/CREDENCIALES_EQUIPO.md
