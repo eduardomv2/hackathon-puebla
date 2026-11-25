@@ -4,15 +4,15 @@
 //   Mientras atiende, escucha en vivo el canal del paciente (cambios y mensajes de WhatsApp).
 import { useEffect, useRef, useState } from 'react'
 import {
-  cancelarCita, cerrarInteraccion, enviarOtp, iniciarContacto,
+  cancelarCita, cerrarInteraccion, cobrarEnCaja, enviarOtp, horariosDisponibles, reprogramarCita, iniciarContacto,
   iniciarSesionPersonal, obtenerContexto, retomarTramite, solicitudesAgente, suscribirPaciente, TIPOS_DOCUMENTO, validarOtp,
   verificarIdentidad, verificarIdentificacion,
-  type Cliente, type Contexto, type SolicitudAgente, type TipoDocumento,
+  type Cliente, type Contexto, type Horario, type SolicitudAgente, type TipoDocumento,
 } from '../api'
 import { AsistenteTramite, NuevoTramite } from '../ui/Tramite'
 import { faltaNombre, FormRegistro } from '../ui/Registro'
 import {
-  describirEvento, dinero, fechaHora, hora, RELACION, Seccion, TarjetasTramites, VistaContexto, type Avisador,
+  describirEvento, dia, dinero, fechaHora, hora, RELACION, Seccion, TarjetasTramites, VistaContexto, type Avisador,
 } from '../ui/comunes'
 
 type Personal = { email: string; rol: string | null; clinica_id: string | null }
@@ -154,21 +154,8 @@ export function Atencion({ cliente, telefono, av, canal = 'call_center' }: {
                     </div>
                     {elegida && nivel === 'declarada' && <p className="tenue">Verifique la identidad (fecha de nacimiento u OTP) para ver el detalle.</p>}
                     {elegida && nivel !== 'declarada' && (
-                      <>
-                        <div>{c.estudio} · {c.clinica}{c.precio != null && ` · ${dinero(c.precio)}`}</div>
-                        {c.beneficiario && c.beneficiario.relacion !== 'titular' && <div className="tenue">Para {c.beneficiario.nombre} ({RELACION[c.beneficiario.relacion]})</div>}
-                        {c.turno && <div>Turno {c.turno} · {c.area}</div>}
-                        {['reservada', 'confirmada'].includes(c.estado) && (
-                          <button className="chico secundario" disabled={av.ocupado} onClick={() => {
-                            if (!window.confirm(`¿Cancelar la cita ${c.folio ?? ''} de ${c.estudio}?${c.estado === 'confirmada' ? ' Ya está pagada: se marcará el reembolso.' : ''}`)) return
-                            void av.accion(async () => {
-                              const r = await cancelarCita(cliente, int, c.id, `cancelada por ${mostrador ? 'recepción' : 'call center'}`)
-                              av.ok(`Cita ${r.folio} cancelada${r.reembolso ? ' (pago marcado para reembolso)' : ''}.`)
-                              setCitaSel(null); await recargar()
-                            })
-                          }}>Cancelar cita</button>
-                        )}
-                      </>
+                      <AccionesCita cliente={cliente} int={int} cita={c} av={av} mostrador={mostrador}
+                        alTerminar={async (quitar) => { if (quitar) setCitaSel(null); await recargar() }} />
                     )}
                   </div>
                 )
@@ -232,5 +219,91 @@ function SolicitudesAgente({ cliente }: { cliente: Cliente }) {
         </div>
       ))}
     </Seccion>
+  )
+}
+
+type CitaCtx = NonNullable<Contexto['citas_proximas']>[number]
+
+/**
+ * Lo que el personal hace con la cita elegida (ya verificada la identidad), aunque su trámite ya cerró:
+ * cambiar fecha u hora, cobrar en caja (solo mostrador y solo citas de su clínica) y cancelar.
+ */
+function AccionesCita({ cliente, int, cita: c, av, mostrador, alTerminar }: {
+  cliente: Cliente; int: string; cita: CitaCtx; av: Avisador; mostrador: boolean; alTerminar: (quitar: boolean) => Promise<void>
+}) {
+  const [horarios, setHorarios] = useState<Horario[] | null>(null)
+  const [metodo, setMetodo] = useState<'efectivo' | 'tarjeta'>('efectivo')
+  const [miClinica, setMiClinica] = useState<string | null>(null)
+  useEffect(() => {
+    void cliente.auth.getUser().then(({ data }) => setMiClinica(data.user?.app_metadata?.clinica_id ?? null))
+  }, [cliente])
+  const editable = ['reservada', 'confirmada'].includes(c.estado)
+  const porCobrar = mostrador && !c.pagada && ['reservada', 'en_clinica'].includes(c.estado)
+  const otraClinica = Boolean(miClinica && c.clinica_id && miClinica !== c.clinica_id)
+  const dias = horarios ? [...new Set(horarios.map((h) => h.fecha))].slice(0, 4) : []
+
+  return (
+    <>
+      <div>{c.estudio} · {c.clinica}{c.precio != null && ` · ${dinero(c.precio)}`} · {c.pagada ? 'pagada' : 'sin pagar'}</div>
+      {c.beneficiario && c.beneficiario.relacion !== 'titular' && <div className="tenue">Para {c.beneficiario.nombre} ({RELACION[c.beneficiario.relacion]})</div>}
+      {c.turno && <div>Turno {c.turno} · {c.area}</div>}
+
+      <div className="fila">
+        {editable && c.clinica_id && c.estudio_id && (
+          <button className="chico" disabled={av.ocupado} onClick={() => horarios ? setHorarios(null) : av.accion(async () =>
+            setHorarios((await horariosDisponibles(cliente, c.clinica_id!, c.estudio_id!, undefined, 7)).filter((h) => h.disponibles > 0)))}>
+            {horarios ? 'Cerrar horarios' : 'Cambiar fecha u hora'}
+          </button>
+        )}
+        {porCobrar && !otraClinica && (
+          <>
+            <select value={metodo} onChange={(e) => setMetodo(e.target.value as 'efectivo' | 'tarjeta')}>
+              <option value="efectivo">efectivo</option>
+              <option value="tarjeta">tarjeta</option>
+            </select>
+            <button className="chico" disabled={av.ocupado} onClick={() => av.accion(async () => {
+              const r = await cobrarEnCaja(cliente, c.id, metodo)
+              av.ok(`Cobrado en caja: ${dinero(r.monto)} en ${r.metodo}. La cita quedó confirmada.`)
+              await alTerminar(false)
+            })}>Cobrar en caja{c.precio != null && ` ${dinero(c.precio)}`}</button>
+          </>
+        )}
+        {editable && (
+          <button className="chico secundario" disabled={av.ocupado} onClick={() => {
+            if (!window.confirm(`¿Cancelar la cita ${c.folio ?? ''} de ${c.estudio}?${c.pagada ? ' Ya está pagada: se marcará el reembolso.' : ''}`)) return
+            void av.accion(async () => {
+              const r = await cancelarCita(cliente, int, c.id, `cancelada por ${mostrador ? 'recepción' : 'call center'}`)
+              av.ok(`Cita ${r.folio} cancelada${r.reembolso ? ' (pago marcado para reembolso)' : ''}.`)
+              await alTerminar(true)
+            })
+          }}>Cancelar cita</button>
+        )}
+      </div>
+      {porCobrar && otraClinica && (
+        <p className="nota-bloqueo">Esta cita es en <b>{c.clinica}</b>: se cobra en la caja de esa sucursal, o el paciente paga en línea.</p>
+      )}
+
+      {horarios && (
+        <div className="form">
+          <b>Nuevo horario en {c.clinica}</b>
+          {!dias.length && <p className="tenue">No hay horarios libres en los próximos días.</p>}
+          {dias.map((d) => (
+            <div key={d} className="dia">
+              <span className="tenue">{dia(d)}</span>
+              <div className="horas">
+                {horarios.filter((h) => h.fecha === d).map((h) => (
+                  <button key={h.fecha_hora} className="hora-boton" disabled={av.ocupado || h.fecha_hora === c.fecha_hora}
+                    onClick={() => av.accion(async () => {
+                      await reprogramarCita(cliente, int, c.id, h.fecha_hora)
+                      av.ok(`Cita ${c.folio ?? ''} movida al ${fechaHora(h.fecha_hora)}`)
+                      setHorarios(null); await alTerminar(false)
+                    })}>{h.hora}</button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   )
 }

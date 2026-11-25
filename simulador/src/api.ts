@@ -277,6 +277,8 @@ export interface CitaProxima {
   clinica: string
   precio: number
   beneficiario: { id: string; nombre: string | null; relacion: Relacion }
+  /** Solo con identidad verificada */
+  clinica_id?: string; estudio_id?: string; pagada?: boolean
 }
 
 export interface PagoPendiente { id: string; monto: number; link_pago: string | null; expira_en: string }

@@ -45,6 +45,7 @@ supabase/
     20261125114816_acciones_citas.sql        marcar_atendida, cancelar_cita, reprogramar_cita, solicitar_agente, solicitudes_agente
     20261125123609_contexto_citas_sin_verificar.sql  el personal ve citas por folio y fecha antes de verificar identidad
     20261125124957_cobro_en_caja.sql         recepción cobra en caja (efectivo o tarjeta) una cita apartada sin pagar
+    20261125131032_citas_con_ids.sql         ya verificada, la cita trae ids de clínica y estudio y si está pagada
   functions/                                Edge Functions (Deno)
     whatsapp-webhook/                       webhook de WhatsApp Cloud API + agente guiado (interpretar.ts, fechas.ts)
     enviar-otp/                             el asesor pide un OTP; el código va al teléfono del paciente
@@ -281,6 +282,7 @@ Los roles se simulan igual que PostgREST: `set local role` más `request.jwt.cla
 | `240_acciones_citas` | Reprogramar (mismo horario, fuera de horario, <1 h, ajena, conserva estado, agenda y evento con canal), cancelar con y sin pago (reembolso, link expirado, trámite abierto cancelado, completado intacto), pedir agente y verlo solo el personal, marcar atendida (llegada previa, otra clínica, doble marca) |
 | `250_citas_sin_verificar` | Sin verificar el personal ve citas con folio, fecha y estado y nada más; al verificar se abre estudio y clínica |
 | `260_cobro_en_caja` | Solo recepción de esa clínica cobra, efectivo o tarjeta, usa el pago del link si existe o crea uno de caja, cita confirmada (o sigue en clínica si ya llegó), trámite completado y los mismos eventos, no se cobra dos veces |
+| `270_citas_con_ids` | Ids de clínica y estudio y `pagada` solo con identidad verificada; el asesor reprograma una cita pagada (trámite cerrado) y queda el evento con su canal |
 | `220_codigo_auth_sesion_reciente` | Dos sesiones esperan el mismo número: al pedir código, la vieja lo pierde (y su token), la nueva lo conserva, otros números no se tocan |
 | `210_codigo_respaldo_sms` | Código guardado cifrado y por 10 min, si falló se devuelve una sola vez, entregado o vencido no se reenvía, 22023 con teléfono inválido, ni anon ni usuarios lo leen |
 | `200_codigo_auth_whatsapp` | Solo Auth ejecuta el hook, responde `{}` y encola la llamada a `enviar-codigo-auth` con el worker_token, 400 sin código, usa `new_phone` si falta `sms.phone`, 429 al sexto código en 10 min |
