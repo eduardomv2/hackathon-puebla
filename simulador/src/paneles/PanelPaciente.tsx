@@ -5,8 +5,8 @@
 //   · En vivo: escucha su canal 'paciente:<id>'; si algo cambia en otro canal, se actualiza y lo dice.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  asegurarSesionAnonima, catalogoEstudios, confirmarOtpTelefono, guardarDatosPaciente, iniciarSesionPaciente, nuevaSesionAnonima,
-  obtenerContexto, pedirOtpTelefono, registrarConsentimientoAvisos, retomarTramite, suscribirPaciente,
+  asegurarSesionAnonima, cancelarCita, catalogoEstudios, confirmarOtpTelefono, guardarDatosPaciente, iniciarSesionPaciente, nuevaSesionAnonima,
+  obtenerContexto, pedirOtpTelefono, registrarConsentimientoAvisos, retomarTramite, solicitarAgente, suscribirPaciente,
   type Cliente, type Contexto, type Estudio, type ModoOtp,
 } from '../api'
 import { AsistenteTramite, NuevoTramite } from '../ui/Tramite'
@@ -187,8 +187,24 @@ export function PanelPaciente({ cliente, telefono: telefonoDemo, escribirEnWhats
                     {fechaHora(c.fecha_hora)} · {c.estudio} · {c.clinica} · <span className={`estado estado-${c.estado}`}>{c.estado === 'en_clinica' ? 'en clínica' : c.estado}</span>
               {c.turno && <span className="turno">Turno {c.turno} · {c.area}</span>}
                     {c.beneficiario.relacion !== 'titular' && <span className="tenue"> · para {c.beneficiario.nombre} ({RELACION[c.beneficiario.relacion]})</span>}
+                    {['reservada', 'confirmada'].includes(c.estado) && (
+                      <button className="chico secundario" style={{ marginLeft: 8 }} disabled={av.ocupado} onClick={() => {
+                        if (!window.confirm(`¿Cancelar la cita de ${c.estudio}?${c.estado === 'confirmada' ? ' Ya está pagada: se marcará el reembolso.' : ''}`)) return
+                        void av.accion(async () => {
+                          const r = await cancelarCita(cliente, ctx.sesion.interaccion_id, c.id, 'cancelada desde la web')
+                          av.ok(`Cita ${r.folio} cancelada${r.reembolso ? ' (pago marcado para reembolso)' : ''}.`)
+                          setCtx(await obtenerContexto(cliente, ctx.sesion.interaccion_id))
+                        })
+                      }}>Cancelar</button>
+                    )}
                   </div>))
               : <p className="tenue">Sin citas próximas.</p>}
+            <div className="fila">
+              <button className="chico secundario" disabled={av.ocupado} onClick={() => av.accion(async () => {
+                const r = await solicitarAgente(cliente, ctx.sesion.interaccion_id, 'desde la web')
+                av.ok(r.mensaje)
+              })}>Hablar con una persona</button>
+            </div>
           </Seccion>
         </>
       )}

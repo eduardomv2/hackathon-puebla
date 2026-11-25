@@ -71,7 +71,7 @@ function detalle(e: ErrorApi): Record<string, string> {
   try { return JSON.parse((e.cuerpo as { details?: string })?.details ?? '{}') } catch { return {} }
 }
 
-export type Resultado = { respuestas: string[] }
+export type Resultado = { respuestas: string[]; no_entregadas?: number }
 
 export async function atenderMensaje(telefono: string, texto: string): Promise<Resultado> {
   const c = new Conversacion(clienteServicio(telefono), telefono)
@@ -93,13 +93,14 @@ export async function atenderMensaje(telefono: string, texto: string): Promise<R
     await c.manejarError(e)
   }
   await c.enviar()
-  return { respuestas: c.respuestas }
+  return { respuestas: c.respuestas, ...(c.noEntregadas ? { no_entregadas: c.noEntregadas } : {}) }
 }
 
 class Conversacion {
   ctx: Contexto
   int = ''
   respuestas: string[] = []
+  noEntregadas = 0
   private links: string[] = []
   /** En este mensaje ya se respondió a la última pregunta del bot (aún sin registrar la nueva) */
   private tramiteElegido = false
@@ -589,14 +590,27 @@ class Conversacion {
     try { await this.recargar(); await this.preguntar() } catch { /* ya se avisó del error */ }
   }
 
-  /** Registra cada respuesta como mensaje saliente y la envía al teléfono. */
+  /**
+   * Envía cada respuesta y la registra como mensaje saliente. Si una no se puede entregar (número fuera de
+   * la lista de pruebas, token vencido, red) NO se corta la conversación: se registra con entrega fallida
+   * para que el personal lo vea en el historial, y se sigue con las demás.
+   */
   async enviar() {
     for (const texto of this.respuestas) {
+      let metadatos: Record<string, unknown> = { entrega: 'enviado' }
+      try {
+        await enviarAlPaciente(this.telefono, 'bot', texto)
+      } catch (e) {
+        console.error('whatsapp-webhook: no se pudo entregar', e)
+        this.noEntregadas++
+        metadatos = { entrega: 'fallida', error: (e instanceof Error ? e.message : String(e)).slice(0, 200) }
+      }
       await rpc(this.api, 'registrar_mensaje', {
-        p_interaccion_id: this.int, p_direccion: 'saliente', p_autor: 'agente_ia', p_contenido: texto,
+        p_interaccion_id: this.int, p_direccion: 'saliente', p_autor: 'agente_ia', p_contenido: texto, p_metadatos: metadatos,
       })
-      await enviarAlPaciente(this.telefono, 'bot', texto)
     }
-    for (const link of this.links) await enviarAlPaciente(this.telefono, 'link_pago', link)
+    for (const link of this.links) {
+      try { await enviarAlPaciente(this.telefono, 'link_pago', link) } catch (e) { console.error('whatsapp-webhook: link sin entregar', e); this.noEntregadas++ }
+    }
   }
 }

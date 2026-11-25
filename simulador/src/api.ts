@@ -558,6 +558,27 @@ export const registrarLlegada = (c: Cliente, cita: string, tipo: TipoDocumento, 
     p_cita_id: cita, p_tipo_documento: tipo, p_cumplio_preparacion: cumplioPreparacion,
   })
 
+/** Recepción: la cita que estaba en la clínica ya fue atendida. */
+export const marcarAtendida = (c: Cliente, cita: string) =>
+  llamar<'marcar_atendida', { cita_id: string; estado: string }>(c, 'marcar_atendida', { p_cita_id: cita })
+
+/** Paciente: cancelar una cita (si ya pagó, el pago queda como reembolsado). */
+export const cancelarCita = (c: Cliente, interaccion: string, cita: string, motivo?: string) =>
+  llamar<'cancelar_cita', { cita_id: string; estado: string; reembolso: boolean; folio: string }>(
+    c, 'cancelar_cita', { p_interaccion_id: interaccion, p_cita_id: cita, p_motivo: motivo })
+
+/** Paciente: cambiar la fecha u hora de una cita (misma clínica y estudio). */
+export const reprogramarCita = (c: Cliente, interaccion: string, cita: string, fechaHora: string) =>
+  llamar<'reprogramar_cita', { cita_id: string; estado: string; fecha_hora: string; folio: string }>(
+    c, 'reprogramar_cita', { p_interaccion_id: interaccion, p_cita_id: cita, p_fecha_hora: fechaHora })
+
+/** Paciente: pedir hablar con una persona. El personal lo ve en su consola. */
+export const solicitarAgente = (c: Cliente, interaccion: string, motivo?: string) =>
+  llamar<'solicitar_agente', { solicitado: boolean; mensaje: string }>(c, 'solicitar_agente', { p_interaccion_id: interaccion, p_motivo: motivo })
+
+export type SolicitudAgente = { paciente_id: string; paciente: string; canal: string; momento: string; motivo: string | null; folio: string | null }
+export const solicitudesAgente = (c: Cliente) => llamar<'solicitudes_agente', SolicitudAgente[]>(c, 'solicitudes_agente', {})
+
 /** Solo el tipo de documento: el número nunca se captura. */
 export const verificarPresencial = (c: Cliente, cita: string, tipo: TipoDocumento) =>
   llamar<'verificar_presencial', { cita_id: string; beneficiario_id: string; tipo_documento: string; verificado_presencial_en: string }>(

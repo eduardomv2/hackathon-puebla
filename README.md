@@ -42,6 +42,7 @@ supabase/
     20261125053539_codigo_respaldo_sms.sql   si WhatsApp no lo entrega, el mismo código por SMS
     20261125063632_codigo_auth_sesion_reciente.sql  al pedir código, solo esa sesión queda esperando el número
     20261125082051_pago_demo.sql             link de pago configurable (pago_url_base), pagos_pendientes, pago simulado
+    20261125114816_acciones_citas.sql        marcar_atendida, cancelar_cita, reprogramar_cita, solicitar_agente, solicitudes_agente
   functions/                                Edge Functions (Deno)
     whatsapp-webhook/                       webhook de WhatsApp Cloud API + agente guiado (interpretar.ts, fechas.ts)
     enviar-otp/                             el asesor pide un OTP; el código va al teléfono del paciente
@@ -275,6 +276,7 @@ Los roles se simulan igual que PostgREST: `set local role` más `request.jwt.cla
 | `120_horarios` | Horario real (domingo 6:30–14:00, lunes 6:00–19:00), clínica cerrada en domingo, festivos sin horarios, horario lleno oculto, 3:00 y 9:10 rechazados, zona horaria |
 | `130_simulador` | Apagado por defecto (42501), encendido funciona, limpieza a la hora |
 | `230_pago_demo` | Link = pago_url_base/pagar/referencia (sin él, nulo), solo el dueño ve y encuentra su pago, el personal no, solo el servidor confirma, evento con `simulado: true`, pagar dos veces es idempotente |
+| `240_acciones_citas` | Reprogramar (mismo horario, fuera de horario, <1 h, ajena, conserva estado, agenda y evento con canal), cancelar con y sin pago (reembolso, link expirado, trámite abierto cancelado, completado intacto), pedir agente y verlo solo el personal, marcar atendida (llegada previa, otra clínica, doble marca) |
 | `220_codigo_auth_sesion_reciente` | Dos sesiones esperan el mismo número: al pedir código, la vieja lo pierde (y su token), la nueva lo conserva, otros números no se tocan |
 | `210_codigo_respaldo_sms` | Código guardado cifrado y por 10 min, si falló se devuelve una sola vez, entregado o vencido no se reenvía, 22023 con teléfono inválido, ni anon ni usuarios lo leen |
 | `200_codigo_auth_whatsapp` | Solo Auth ejecuta el hook, responde `{}` y encola la llamada a `enviar-codigo-auth` con el worker_token, 400 sin código, usa `new_phone` si falta `sms.phone`, 429 al sexto código en 10 min |

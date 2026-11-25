@@ -6,7 +6,7 @@
 // El trámite que recepción atiende queda bloqueado para los demás canales (el personal manda).
 import { useEffect, useState } from 'react'
 import {
-  agendaClinica, directorioClinicas, registrarLlegada, TIPOS_DOCUMENTO,
+  agendaClinica, directorioClinicas, marcarAtendida, registrarLlegada, TIPOS_DOCUMENTO,
   type CitaAgenda, type Cliente, type Clinica, type Llegada, type TipoDocumento,
 } from '../api'
 import { dinero, hora, hoyLocal, Seccion, type Avisador } from '../ui/comunes'
@@ -81,6 +81,12 @@ function Llegadas({ cliente, av, clinicaFija }: { cliente: Cliente; av: Avisador
               <span className={c.pagada ? 'estado estado-confirmada' : 'estado estado-reservada'}>{c.pagada ? 'pagada' : 'pago pendiente'}</span>
               {esHoy && ['reservada', 'confirmada'].includes(c.estado) && abierta !== c.cita_id && (
                 <button className="chico" onClick={() => setAbierta(c.cita_id)}>Registrar llegada</button>
+              )}
+              {c.estado === 'en_clinica' && (
+                <button className="chico" disabled={av.ocupado} onClick={async () => {
+                  const r = await av.accion(() => marcarAtendida(cliente, c.cita_id))
+                  if (r) { av.ok(`Cita de ${c.paciente} marcada como atendida.`); await cargar() }
+                }}>Marcar atendida</button>
               )}
             </div>
             {abierta === c.cita_id && (

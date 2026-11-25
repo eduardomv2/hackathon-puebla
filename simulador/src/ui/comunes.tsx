@@ -209,6 +209,8 @@ export function describirEvento(tipo: string, canal: string): string | null {
     cita_confirmada: 'la cita quedó confirmada', tramite_completado: 'el trámite terminó', tramite_cancelado: 'se canceló un trámite',
     atencion_iniciada: 'un asesor tomó el trámite', atencion_liberada: 'el asesor soltó el trámite',
     beneficiario_agregado: 'se registró un familiar', identidad_verificada: 'se verificó la identidad',
+    cita_cancelada: 'se canceló la cita', cita_reprogramada: 'se cambió la fecha de la cita', cita_atendida: 'la cita fue atendida',
+    agente_solicitado: 'pidió hablar con una persona',
     pago_fallido: 'el pago fue rechazado', limite_citas_alcanzado: 'se llegó al máximo de citas',
   }
   return que[tipo] ? `Desde ${CANAL[canal] ?? canal}: ${que[tipo]}` : null

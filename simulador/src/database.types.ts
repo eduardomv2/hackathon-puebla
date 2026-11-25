@@ -31,6 +31,9 @@ export type Database = {
 "buscar_pacientes":
 { Args: { "p_limite"?: number,"p_texto": string }; Returns: Json
                            },
+"cancelar_cita":
+{ Args: { "p_cita_id": string,"p_interaccion_id": string,"p_motivo"?: string }; Returns: Json
+                           },
 "catalogo_estudios":
 { Args: { "p_busqueda"?: string,"p_categoria"?: string }; Returns: Json
                            },
@@ -79,6 +82,9 @@ export type Database = {
 "kb_guardar_documento":
 { Args: { "p_categoria": string,"p_fragmentos": Json,"p_fuente": string,"p_reemplaza"?: string,"p_titulo": string }; Returns: string
                            },
+"marcar_atendida":
+{ Args: { "p_cita_id": string }; Returns: Json
+                           },
 "material_resumen":
 { Args: { "p_tramite_id": string }; Returns: Json
                            },
@@ -112,6 +118,9 @@ export type Database = {
 "registrar_mensaje":
 { Args: { "p_autor": string,"p_contenido": string,"p_direccion": string,"p_interaccion_id": string,"p_metadatos"?: Json }; Returns: string
                            },
+"reprogramar_cita":
+{ Args: { "p_cita_id": string,"p_fecha_hora": string,"p_interaccion_id": string }; Returns: Json
+                           },
 "reservar_cita":
 { Args: { "p_fecha_hora": string,"p_interaccion_id": string,"p_tramite_id": string,"p_version": number }; Returns: Json
                            },
@@ -121,8 +130,14 @@ export type Database = {
 "retomar_tramite":
 { Args: { "p_interaccion_id": string,"p_tramite_id": string }; Returns: Json
                            },
+"solicitar_agente":
+{ Args: { "p_interaccion_id": string,"p_motivo"?: string }; Returns: Json
+                           },
 "solicitar_otp":
 { Args: { "p_interaccion_id": string }; Returns: Json
+                           },
+"solicitudes_agente":
+{ Args: { "p_limite"?: number }; Returns: Json
                            },
 "texto_asesor_atendiendo":
 { Args: { "p_interaccion_id": string,"p_tramite_id": string }; Returns: string
