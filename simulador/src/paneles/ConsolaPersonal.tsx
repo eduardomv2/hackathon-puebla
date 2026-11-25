@@ -5,7 +5,7 @@
 //   admin      → Supervisión, Call center y Recepción
 // La usan /personal (con cierre automático tras 30 min sin actividad) y las columnas de /demo.
 import { useEffect, useState } from 'react'
-import { cerrarSesion, iniciarSesionPersonal, sesionVigente, type Cliente } from '../api'
+import { cerrarSesion, directorioClinicas, iniciarSesionPersonal, sesionVigente, type Cliente } from '../api'
 import { Avisos, useAvisos } from '../ui/comunes'
 import { useCierrePorInactividad } from '../ui/inactividad'
 import { Atencion, Login } from './PanelAsesor'
@@ -62,6 +62,15 @@ export function ConsolaPersonal({ cliente, telefono = '', titulo = 'Personal', e
 
   const pestanas = pestanasDeRol(yo?.rol ?? null).filter((p) => !soloPestanas || soloPestanas.includes(p))
   useEffect(() => { setPestana(pestanas[0] ?? null) }, [yo?.rol]) // eslint-disable-line
+  // La clínica de la cuenta (recepción y supervisión): solo opera sobre sus citas
+  const [nombreClinica, setNombreClinica] = useState<string | null>(null)
+  useEffect(() => {
+    setNombreClinica(null)
+    if (!yo?.clinica_id) return
+    void directorioClinicas(cliente, { limite: 300 })
+      .then((l) => setNombreClinica(l.find((c) => c.id === yo.clinica_id)?.nombre ?? 'sin nombre'))
+      .catch(() => {})
+  }, [cliente, yo?.clinica_id])
 
   const salir = async (motivo?: string) => {
     await cerrarSesion(cliente)
@@ -89,7 +98,7 @@ export function ConsolaPersonal({ cliente, telefono = '', titulo = 'Personal', e
         ? <Login cliente={cliente} av={av} emailInicial={emailInicial} alEntrar={(p) => setYo(p)} />
         : <>
             <div className="fila tenue">
-              {yo.email} · {yo.rol}
+              {yo.email} · {yo.rol}{yo.clinica_id && <> · clínica <b>{nombreClinica ?? '…'}</b></>}
               <button className="secundario chico" onClick={() => void salir()}>Salir</button>
             </div>
             {!pestanas.length && <p className="tenue">Este usuario no tiene acceso a esta sección.</p>}

@@ -342,6 +342,13 @@ function PasoPago({ cliente, ctx, av, hacer, telefonoAviso }: PasoProps & { tele
   const esPaciente = ctx.sesion.canal === 'web' || ctx.sesion.canal === 'app'
   const enCaja = ctx.sesion.canal === 'clinica'
   const [metodo, setMetodo] = useState<'efectivo' | 'tarjeta'>('efectivo')
+  // Cada recepción cobra solo las citas de su clínica (la de su cuenta)
+  const [miClinica, setMiClinica] = useState<string | null>(null)
+  useEffect(() => {
+    if (!enCaja) return
+    void cliente.auth.getUser().then(({ data }) => setMiClinica(data.user?.app_metadata?.clinica_id ?? null))
+  }, [cliente, enCaja])
+  const otraClinica = enCaja && miClinica && t.clinica?.id && t.clinica.id !== miClinica
   // Nube: sin pasarela, el paciente paga con el pago de prueba (pago-demo); el personal no paga por él
   const pagarEnNube = async () => {
     const ref = pago?.referencia ?? (await pagosPendientes(cliente, int)).find((p) => p.tramite_id === t.id)?.referencia
@@ -369,7 +376,10 @@ function PasoPago({ cliente, ctx, av, hacer, telefonoAviso }: PasoProps & { tele
               <p className="tenue">El paciente paga desde su app o por WhatsApp (respondiendo PAGAR).</p>
             )}
           </>}
-      {enCaja && t.contexto.cita_id && (
+      {otraClinica && (
+        <p className="nota-bloqueo">Esta cita es en <b>{t.clinica?.nombre}</b>: se cobra en la caja de esa sucursal, o el paciente paga en línea (app, web o WhatsApp respondiendo PAGAR).</p>
+      )}
+      {enCaja && !otraClinica && t.contexto.cita_id && (
         <div className="fila">
           <span>Cobrar en caja:</span>
           <select value={metodo} onChange={(e) => setMetodo(e.target.value as 'efectivo' | 'tarjeta')}>
