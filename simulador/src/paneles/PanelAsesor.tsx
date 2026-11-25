@@ -4,7 +4,7 @@
 //   Mientras atiende, escucha en vivo el canal del paciente (cambios y mensajes de WhatsApp).
 import { useEffect, useRef, useState } from 'react'
 import {
-  cerrarInteraccion, enviarOtp, iniciarContacto,
+  cancelarCita, cerrarInteraccion, enviarOtp, iniciarContacto,
   iniciarSesionPersonal, obtenerContexto, retomarTramite, solicitudesAgente, suscribirPaciente, TIPOS_DOCUMENTO, validarOtp,
   verificarIdentidad, verificarIdentificacion,
   type Cliente, type Contexto, type SolicitudAgente, type TipoDocumento,
@@ -12,7 +12,7 @@ import {
 import { AsistenteTramite, NuevoTramite } from '../ui/Tramite'
 import { faltaNombre, FormRegistro } from '../ui/Registro'
 import {
-  describirEvento, fechaHora, hora, Seccion, TarjetasTramites, VistaContexto, type Avisador,
+  describirEvento, dinero, fechaHora, hora, RELACION, Seccion, TarjetasTramites, VistaContexto, type Avisador,
 } from '../ui/comunes'
 
 type Personal = { email: string; rol: string | null; clinica_id: string | null }
@@ -51,6 +51,7 @@ export function Atencion({ cliente, telefono, av, canal = 'call_center' }: {
   const [otp, setOtp] = useState('')
   const [enVivo, setEnVivo] = useState('')
   const [nuevo, setNuevo] = useState(false)
+  const [citaSel, setCitaSel] = useState<string | null>(null)
   const ctxRef = useRef<Contexto | null>(null)
   ctxRef.current = ctx
   useEffect(() => setTel(telefono), [telefono])
@@ -89,7 +90,7 @@ export function Atencion({ cliente, telefono, av, canal = 'call_center' }: {
         <div className="fila">
           <input value={tel} onChange={(e) => setTel(e.target.value)} placeholder="Teléfono" />
           <button disabled={av.ocupado} onClick={() => av.accion(async () => {
-            setOtpEnviado(null); setOtp(''); setFecha('')
+            setOtpEnviado(null); setOtp(''); setFecha(''); setCitaSel(null)
             setCtx(await iniciarContacto(cliente, canal, tel))
           })}>{mostrador ? 'Buscar' : 'Atender'}</button>
           {ctx && <button className="secundario" disabled={av.ocupado} onClick={() => av.accion(async () => {
@@ -139,6 +140,41 @@ export function Atencion({ cliente, telefono, av, canal = 'call_center' }: {
             </Seccion>
           )}
 
+          {!!ctx.citas_proximas?.length && (
+            <Seccion titulo={`Citas del paciente (${ctx.citas_proximas.length})`}>
+              {nivel === 'declarada' && <p className="tenue">Elija la cita que menciona el paciente y verifique su identidad para abrir el detalle.</p>}
+              {ctx.citas_proximas.map((c) => {
+                const elegida = citaSel === c.id
+                return (
+                  <div key={c.id} className={`tarjeta-tramite ${elegida ? 'activa' : ''}`}>
+                    <div className="fila">
+                      <b>{c.folio ?? 'Cita'}</b> · {fechaHora(c.fecha_hora)} ·{' '}
+                      <span className={`estado estado-${c.estado}`}>{c.estado === 'en_clinica' ? 'en clínica' : c.estado}</span>
+                      <button className="chico secundario derecha" onClick={() => setCitaSel(elegida ? null : c.id)}>{elegida ? 'Quitar' : 'Elegir'}</button>
+                    </div>
+                    {elegida && nivel === 'declarada' && <p className="tenue">Verifique la identidad (fecha de nacimiento u OTP) para ver el detalle.</p>}
+                    {elegida && nivel !== 'declarada' && (
+                      <>
+                        <div>{c.estudio} · {c.clinica}{c.precio != null && ` · ${dinero(c.precio)}`}</div>
+                        {c.beneficiario && c.beneficiario.relacion !== 'titular' && <div className="tenue">Para {c.beneficiario.nombre} ({RELACION[c.beneficiario.relacion]})</div>}
+                        {c.turno && <div>Turno {c.turno} · {c.area}</div>}
+                        {['reservada', 'confirmada'].includes(c.estado) && (
+                          <button className="chico secundario" disabled={av.ocupado} onClick={() => {
+                            if (!window.confirm(`¿Cancelar la cita ${c.folio ?? ''} de ${c.estudio}?${c.estado === 'confirmada' ? ' Ya está pagada: se marcará el reembolso.' : ''}`)) return
+                            void av.accion(async () => {
+                              const r = await cancelarCita(cliente, int, c.id, `cancelada por ${mostrador ? 'recepción' : 'call center'}`)
+                              av.ok(`Cita ${r.folio} cancelada${r.reembolso ? ' (pago marcado para reembolso)' : ''}.`)
+                              setCitaSel(null); await recargar()
+                            })
+                          }}>Cancelar cita</button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </Seccion>
+          )}
           {nivel === 'verificada' && faltaNombre(ctx) && (
             <FormRegistro cliente={cliente} ctx={ctx} av={av} alCambiar={setCtx} titulo="Capture el registro del titular (antes del primer trámite)" />
           )}
