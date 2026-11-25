@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "tipos": "cd .. && npx supabase gen types typescript --local --schema api < /dev/null > simulador/src/database.types.ts",
     "usuarios": "tsx scripts/crear-usuarios.ts",
+    "clinicas": "tsx scripts/generar-clinicas.ts",
     "probar-api": "tsx scripts/probar-api.ts",
     "probar-bot": "tsx --test ../supabase/functions/whatsapp-webhook/interpretar.test.ts ../supabase/functions/whatsapp-webhook/fechas.test.ts"
   },

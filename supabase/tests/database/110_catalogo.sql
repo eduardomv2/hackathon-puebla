@@ -9,8 +9,8 @@ select is(jsonb_array_length(api.catalogo_estudios()), 6, 'anon puede consultar 
 select is(jsonb_array_length(api.catalogo_estudios('ultrasonido')), 2, 'La búsqueda encuentra los dos ultrasonidos');
 select is(jsonb_array_length(api.catalogo_estudios('ULTRASONÍDO')), 2, 'sin distinguir mayúsculas ni acentos');
 select is(api.catalogo_estudios('obstetrico') -> 0 ->> 'clave', 'US-OBS', '"obstetrico" encuentra "Ultrasonido obstétrico"');
-select is(jsonb_array_length(api.clinicas_para_estudio(tests.estudio('BH'), 'puebla')), 2,
-          'clinicas_para_estudio filtra por ciudad');
+select is(jsonb_array_length(api.clinicas_para_estudio(tests.estudio('BH'), 'puebla')), 8,
+          'clinicas_para_estudio filtra por ciudad (8 clínicas en la ciudad de Puebla)');
 
 -- Lo inactivo no aparece
 select tests.como_postgres();
@@ -19,7 +19,8 @@ update core.clinicas set activa = false where clave = 'MTY-CEN';
 select tests.como_anon();
 select ok(not exists (select 1 from jsonb_array_elements(api.catalogo_estudios()) e where e ->> 'clave' = 'QS6'),
           'Un estudio inactivo no aparece');
-select is(jsonb_array_length(api.clinicas_para_estudio(tests.estudio('BH'))), 2, 'Una clínica inactiva no aparece');
+select ok(not exists (select 1 from jsonb_array_elements(api.clinicas_para_estudio(tests.estudio('BH'), 'monterrey')) c
+                      where c ->> 'clave' = 'MTY-CEN'), 'Una clínica inactiva no aparece');
 select throws_ok(format('select api.clinicas_para_estudio(%L)', tests.estudio('QS6')), 'PT404', 'Estudio no encontrado',
                  'Pedir clínicas de un estudio inactivo responde PT404');
 

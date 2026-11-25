@@ -74,7 +74,7 @@ schema_paths = []
 enabled = true
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory: "./seeds/*.sql"
-sql_paths = ["./seed.sql"]
+sql_paths = ["./seeds/clinicas.sql", "./seed.sql"]
 
 [db.network_restrictions]
 # Enable management of network restrictions.
@@ -204,7 +204,7 @@ password_requirements = ""
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
 email_sent = 2
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
-sms_sent = 30
+sms_sent = 100
 # Number of anonymous sign-ins that can be made per hour per IP address. Requires enable_anonymous_sign_ins = true.
 anonymous_users = 30
 # Number of sessions that can be refreshed in a 5 minute interval per IP address.
@@ -280,8 +280,9 @@ max_frequency = "5s"
 
 # Use pre-defined map of phone number to OTP for testing.
 # Keys are the phone number with country code and without the + prefix.
-# SOLO PRUEBAS LOCALES (simulador): estos números reciben siempre el código 123456
-# y Auth no intenta enviarles un SMS.
+# SOLO PRUEBAS LOCALES: estos números reciben siempre el código 123456 sin enviar nada
+# (los usan los escenarios automáticos de /demo). Cualquier otro número recibe un código
+# real por el hook send_sms de abajo.
 [auth.sms.test_otp]
 528661234567 = "123456"
 528661234568 = "123456"
@@ -307,15 +308,15 @@ max_frequency = "5s"
 # uri = "pg-functions://<database>/<schema>/<hook_name>"
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
-# SOLO LOCAL: proveedor FICTICIO. Auth exige un proveedor para activar el login por
-# teléfono, pero con los números de [auth.sms.test_otp] nunca llama a Twilio.
-# Un número que no esté en test_otp fallará al "enviar" (no hay credenciales reales).
-[auth.sms.twilio]
+# No se usa ningún proveedor de SMS: el código lo entrega el hook de abajo por WhatsApp.
+
+# Send SMS Hook: Auth genera el código del celular y, en lugar de un SMS, llama a la
+# función de Postgres hooks.enviar_codigo_auth, que pide a la Edge Function
+# enviar-codigo-auth entregarlo por WhatsApp (en local: al teléfono simulado, con
+# cualquier número). En producción se activa en el panel: Authentication → Hooks.
+[auth.hook.send_sms]
 enabled = true
-account_sid = "ACficticio_solo_local"
-message_service_sid = "MGficticio_solo_local"
-# DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
-auth_token = "token-ficticio-solo-local"
+uri = "pg-functions://postgres/hooks/enviar_codigo_auth"
 
 # Multi-factor-authentication is available to Supabase Pro plan.
 [auth.mfa]
@@ -456,4 +457,8 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.procesar-resumenes]
+verify_jwt = false
+
+# La llama la base por pg_net con el worker_token; la función lo valida
+[functions.enviar-codigo-auth]
 verify_jwt = false

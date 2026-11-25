@@ -110,8 +110,8 @@ const recorridoDeAna: Escenario = {
       () => registrarseEnWeb('Ana', 'López', 'García'))
     await paso(c, 'paciente', '🌐 Web · Elige el estudio (Ultrasonido obstétrico) y para quién: para ella.',
       () => empezarTramiteEnWeb('Ultrasonido obstétrico'))
-    await paso(c, 'paciente', '🌐 Web · Elige la clínica Puebla Centro… y cierra la página sin elegir hora.', async () => {
-      await clic('paciente', /^Clínica Puebla Centro/)
+    await paso(c, 'paciente', '🌐 Web · Elige la clínica Puebla (centro)… y cierra la página sin elegir hora.', async () => {
+      await clic('paciente', /^Puebla ·/)
       await esperarTexto('paciente', /Horarios en/)
       abrirJourney(this.telefono)
     })
@@ -174,8 +174,8 @@ const mamaParaSuHijo: Escenario = {
       await clic('paciente', 'Iniciar trámite')
       abrirJourney(this.telefono)
     })
-    await paso(c, 'paciente', '🌐 Web · Clínica Puebla Centro y hora: la cita de Luis queda apartada.', async () => {
-      await clic('paciente', /^Clínica Puebla Centro/)
+    await paso(c, 'paciente', '🌐 Web · Clínica Puebla (centro) y hora: la cita de Luis queda apartada.', async () => {
+      await clic('paciente', /^Puebla ·/)
       await clic('paciente', /^\d\d:\d\d$/)
       await esperarTexto('paciente', /Cita apartada/i)
     })
@@ -208,10 +208,10 @@ const elAsesorManda: Escenario = {
   id: 3, titulo: 'El asesor manda', telefono: '528661234569',
   async correr(c) {
     await c.usarTelefono(this.telefono)
-    await paso(c, 'paciente', '🌐 Web · Ana se registra y empieza una Mastografía en Puebla Centro.', async () => {
+    await paso(c, 'paciente', '🌐 Web · Ana se registra y empieza una Mastografía en Puebla (centro).', async () => {
       await registrarseEnWeb('Ana', 'Torres')
       await empezarTramiteEnWeb('Mastografía')
-      await clic('paciente', /^Clínica Puebla Centro/)
+      await clic('paciente', /^Puebla ·/)
       abrirJourney(this.telefono)
     })
     await paso(c, 'personal', '📞 Call center · Ana llama; la asesora la verifica con OTP…', async () => {
@@ -229,7 +229,7 @@ const elAsesorManda: Escenario = {
       await whatsapp('menu', /Tienes pendiente:/)
       await whatsapp(numeroDe(/Empezar otro/), /qué estudio necesitas/)
       await whatsapp('biometria', /para quién es/)
-      await whatsapp('1', /En qué clínica/)
+      await whatsapp('1', /En qué ciudad o municipio/)
     })
     await paso(c, 'personal', '📞 Call center · La asesora cuelga: la Mastografía se libera y WhatsApp le avisa a Ana.', async () => {
       await clic('personal', 'Colgar')

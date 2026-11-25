@@ -51,3 +51,12 @@ test('horario: confirmación de día y hora', () => {
   assert.deepEqual(interpretar('Si, por favor', conf), { tipo: 'elegir_horario', fecha_hora: h.fecha_hora })
   assert.deepEqual(interpretar('no', conf), { tipo: 'elegir_dia', fecha: '2026-11-26', hora: null })
 })
+
+test('clínica: primero el lugar, luego cuál', () => {
+  assert.deepEqual(interpretar('Puebla', ctx('clinica_lugar')), { tipo: 'buscar_clinica', texto: 'Puebla' })
+  assert.equal(interpretar('2', ctx('clinica_lugar')).tipo, 'no_entendido', 'un número no es un lugar')
+  const lista = ctx('clinica', { opciones: [{ id: 'a', etiqueta: 'Puebla — $120' }, { id: 'b', etiqueta: 'Puebla Capu — $120' }] })
+  assert.deepEqual(interpretar('2', lista), { tipo: 'elegir_clinica', clinica_id: 'b' })
+  assert.deepEqual(interpretar('capu', lista), { tipo: 'elegir_clinica', clinica_id: 'b' })
+  assert.deepEqual(interpretar('mejor en Cholula', lista), { tipo: 'buscar_clinica', texto: 'Cholula' }, 'otro lugar')
+})

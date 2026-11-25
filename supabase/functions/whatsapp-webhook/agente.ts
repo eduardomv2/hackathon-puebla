@@ -26,6 +26,16 @@ const MARCA_DIA = '¿Qué día te gustaría?'
 const MARCA_MENU = /^Horarios del \p{L}+ (\d{1,2}) de (\p{L}+) en /u
 const MARCA_CONFIRMAR = /^¿Te aparto el \p{L}+ (\d{1,2}) de (\p{L}+) a las (\d\d:\d\d)/u
 const MENU_MAX = 10
+const MARCA_LUGAR = '¿En qué ciudad o municipio quieres tu cita?'
+const MARCA_CLINICAS = /^Clínicas para «(.+)»:$/m
+/** Más resultados que esto: se pide un lugar más preciso */
+const CLINICAS_MAX = 12
+/** Formas comunes de escribir un lugar → como está en el directorio */
+const ALIAS_LUGAR: Record<string, string> = {
+  cdmx: 'ciudad de mexico', df: 'ciudad de mexico', 'mexico df': 'ciudad de mexico',
+  edomex: 'estado de mexico', 'edo mex': 'estado de mexico', 'edo de mexico': 'estado de mexico',
+  gdl: 'guadalajara', mty: 'monterrey', qro: 'queretaro', slp: 'san luis potosi',
+}
 
 /** "26 de noviembre" (de un mensaje del bot) → AAAA-MM-DD */
 function fechaDeMensaje(dia: string, mes: string, hoy: string): string | undefined {
@@ -135,7 +145,7 @@ class Conversacion {
     if (t.en_atencion_de_otro) return 'en_atencion'
     switch (t.paso_actual) {
       case 'seleccion_estudio': return t.contexto?.beneficiario_id ? 'estudio' : 'beneficiario'
-      case 'seleccion_clinica': return 'clinica'
+      case 'seleccion_clinica': return MARCA_CLINICAS.test(ultimo) ? 'clinica' : 'clinica_lugar'
       case 'seleccion_horario':
         if (MARCA_MENU.test(ultimo)) return 'horario_menu'
         if (MARCA_CONFIRMAR.test(ultimo)) return 'horario_confirmar'
@@ -180,9 +190,9 @@ class Conversacion {
       const estudios: { id: string; nombre: string; precio_base: number }[] = await rpc(this.api, 'catalogo_estudios')
       opciones = estudios.map((e) => ({ id: e.id, etiqueta: `${e.nombre} — desde ${pesos(e.precio_base)}` }))
     } else if (paso === 'clinica') {
-      const clinicas: { id: string; nombre: string; ciudad: string; precio: number }[] =
-        await rpc(this.api, 'clinicas_para_estudio', { p_estudio_id: t.contexto.estudio_id })
-      opciones = clinicas.map((c) => ({ id: c.id, etiqueta: `${c.nombre} (${c.ciudad}) — ${pesos(c.precio)}` }))
+      // Las clínicas del lugar que se listó en el último mensaje (mismo orden)
+      const lugar = this.ultimoBot().match(MARCA_CLINICAS)?.[1] ?? ''
+      opciones = (await this.clinicasEn(lugar)).map((c) => ({ id: c.id, etiqueta: this.etiquetaClinica(c) }))
     } else if (paso === 'horario_menu') {
       // El menú lo reconstruye del último mensaje: "Horarios del jueves 26 de noviembre…" + "1) 07:00"…
       const ultimo = this.ultimoBot()
@@ -229,9 +239,13 @@ class Conversacion {
       case 'estudio':
         return this.decir(`¿Qué estudio necesitas${t.beneficiario && t.beneficiario.relacion !== 'titular' ? ` para ${t.beneficiario.nombre}` : ''}? ` +
           `Responde con el número o escribe el nombre:\n${lista(d.opciones)}`)
-      case 'clinica':
+      case 'clinica_lugar':
         return this.decir(`${t.estudio?.nombre}${cual}. Preparación: ${t.estudio?.preparacion ?? 'sin indicaciones'}\n\n` +
-          `¿En qué clínica?\n${lista(d.opciones)}`)
+          `${MARCA_LUGAR} Escríbelo (por ejemplo: Puebla, Cholula o Tlalpan).`)
+      case 'clinica': {
+        const lugar = this.ultimoBot().match(MARCA_CLINICAS)?.[1] ?? ''
+        return this.decir(`Clínicas para «${lugar}»:\n${lista(d.opciones)}\nResponde con el número o escribe otro lugar.`)
+      }
       case 'horario_dia':
         return this.decir(`${MARCA_DIA} ${t.estudio?.nombre} en ${this.clinicaCorta}${cual}.\n` +
           'Escribe hoy, mañana, un día (jueves) o una fecha (26/11). También puedes poner la hora: "jueves 7am".')
@@ -347,6 +361,18 @@ class Conversacion {
       case 'elegir_clinica':
         await this.avanzar('seleccion_horario', { clinica_id: i.clinica_id })
         return this.preguntar()
+      case 'buscar_clinica': {
+        const clinicas = await this.clinicasEn(i.texto)
+        this.tramiteElegido = true
+        if (!clinicas.length) {
+          return this.decir(`No encontré clínicas en «${i.texto}». ${MARCA_LUGAR} Prueba con tu ciudad o municipio.`)
+        }
+        if (clinicas.length > CLINICAS_MAX) {
+          return this.decir(`Hay muchas clínicas en «${i.texto}». ${MARCA_LUGAR} Escribe tu municipio, alcaldía o colonia.`)
+        }
+        return this.decir(`Clínicas para «${i.texto}»:\n` +
+          clinicas.map((c, k) => `${k + 1}) ${this.etiquetaClinica(c)}`).join('\n') + '\nResponde con el número o escribe otro lugar.')
+      }
       case 'elegir_dia':
         this.tramiteElegido = true
         return this.mostrarDia(i.fecha, i.hora)
@@ -377,6 +403,23 @@ class Conversacion {
         if (d.paso !== 'en_atencion') this.decir('No te entendí 🤔')
         return this.preguntar(d)
     }
+  }
+
+  /** Clínicas del estudio del trámite que coinciden con un lugar escrito por la paciente */
+  private async clinicasEn(lugar: string, limite = CLINICAS_MAX + 1): Promise<{ id: string; nombre: string; ciudad: string; precio: number }[]> {
+    const texto = normalizar(lugar)
+    if (!texto) return []
+    const buscado = ALIAS_LUGAR[texto] ?? texto
+    const todas: { id: string; nombre: string; ciudad: string; precio: number }[] = await rpc(this.api, 'clinicas_para_estudio', {
+      p_estudio_id: this.tramite.contexto.estudio_id, p_busqueda: buscado, p_limite: 100,
+    })
+    // "Puebla" es ciudad y estado: si son muchas, solo las de la ciudad
+    const enCiudad = todas.filter((c) => normalizar(c.ciudad) === buscado)
+    return (todas.length > limite && enCiudad.length ? enCiudad : todas).slice(0, limite)
+  }
+
+  private etiquetaClinica(c: { nombre: string; ciudad: string; precio: number }) {
+    return `${c.nombre}${normalizar(c.nombre).includes(normalizar(c.ciudad)) ? '' : ` (${c.ciudad})`} — ${pesos(c.precio)}`
   }
 
   get clinicaCorta(): string { return (this.tramite?.clinica?.nombre ?? 'la clínica').replace(/^Clínica\s+/, '') }

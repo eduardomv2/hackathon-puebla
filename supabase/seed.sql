@@ -17,12 +17,9 @@ select vault.create_secret('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXB
                            'worker_token', 'service_role de demostración (solo local)')
 where not exists (select 1 from vault.secrets where name = 'worker_token');
 
--- Catálogo inicial (datos de ejemplo: precios y clínicas ficticios)
-insert into core.clinicas (clave, nombre, ciudad, estado, direccion) values
-  ('PUE-CEN', 'Clínica Puebla Centro',   'Puebla',    'Puebla',   'Av. Reforma 100, Centro'),
-  ('PUE-ANG', 'Clínica Puebla Angelópolis', 'Puebla', 'Puebla',   'Blvd. del Niño Poblano 2000'),
-  ('MTY-CEN', 'Clínica Monterrey Centro', 'Monterrey', 'Nuevo León', 'Av. Constitución 300');
-
+-- Catálogo inicial. Las clínicas (261 reales, con su horario de atención) las carga antes
+-- seeds/clinicas.sql, generado desde seeds/clinicasData.ts (npm run clinicas en simulador/).
+-- Los estudios y sus precios son de ejemplo.
 -- area: a qué área se dirige al paciente al llegar (y la letra de su turno: A, U, R, M)
 insert into core.estudios (clave, nombre, categoria, area, preparacion, duracion_min, precio_base) values
   ('US-OBS', 'Ultrasonido obstétrico', 'imagen',      'ultrasonido', 'Vejiga llena: tomar 1 litro de agua una hora antes.', 30, 450.00),
@@ -35,12 +32,6 @@ insert into core.estudios (clave, nombre, categoria, area, preparacion, duracion
 insert into core.clinica_estudios (clinica_id, estudio_id, capacidad_por_horario)
 select c.id, e.id, case when e.categoria = 'imagen' then 2 else 10 end
 from core.clinicas c cross join core.estudios e;
-
--- Horario de atención: lunes a viernes 7:00–15:00, sábado 7:00–12:00, cada 30 min.
--- Domingo sin renglón = cerrado.
-insert into core.horarios_clinica (clinica_id, dia_semana, abre, cierra)
-select c.id, d, '07:00', case when d = 6 then time '12:00' else time '15:00' end
-from core.clinicas c cross join generate_series(1, 6) d;
 
 -- Simulador (bandeja del teléfono de prueba): encendido solo aquí
 update simulador.config set habilitado = true;

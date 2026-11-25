@@ -14,7 +14,8 @@ export type Paso =
   | 'menu' | 'elegir_tramite' | 'en_atencion'
   | 'registro'                               // falta el nombre del titular: se pide antes de empezar
   | 'nuevo_estudio' | 'nuevo_para'           // "Empezar otro": primero el estudio, luego para quién
-  | 'beneficiario' | 'estudio' | 'clinica'
+  | 'beneficiario' | 'estudio'
+  | 'clinica_lugar' | 'clinica'             // ¿en qué ciudad? → clínicas de ese lugar
   | 'horario_dia' | 'horario_menu' | 'horario_confirmar'   // ¿qué día? → menú de horas del día → ¿te aparto…?
   | 'pago'
 
@@ -55,6 +56,7 @@ export type Intencion =
   | { tipo: 'elegir_estudio'; estudio_id: string }
   | { tipo: 'buscar_estudio'; texto: string }
   | { tipo: 'elegir_clinica'; clinica_id: string }
+  | { tipo: 'buscar_clinica'; texto: string }
   | { tipo: 'elegir_horario'; fecha_hora: string }
   | { tipo: 'elegir_dia'; fecha: string; hora: string | null }
   | { tipo: 'fecha_invalida'; motivo: 'pasada' | 'lejana' | 'no_entendida'; fecha?: string }
@@ -205,10 +207,17 @@ export function interpretar(mensaje: string, ctx: ContextoDialogo): Intencion {
       if (t.length >= 3 && !/^\d+$/.test(t)) return { tipo: 'buscar_estudio', texto: mensaje.trim() }
       return { tipo: 'no_entendido' }
 
+    case 'clinica_lugar':
+      // Ciudad, municipio, estado o colonia ("Puebla", "Tlalpan", "cdmx")
+      if (t.length >= 3 && !/^\d+$/.test(t)) return { tipo: 'buscar_clinica', texto: mensaje.trim() }
+      return { tipo: 'no_entendido' }
+
     case 'clinica': {
       if (n) return { tipo: 'elegir_clinica', clinica_id: ctx.opciones[n - 1].id }
       const porNombre = ctx.opciones.filter((o) => t.length >= 3 && normalizar(o.etiqueta).includes(t))
       if (porNombre.length === 1) return { tipo: 'elegir_clinica', clinica_id: porNombre[0].id }
+      // Otro lugar ("mejor en Cholula")
+      if (t.length >= 3 && !/^\d+$/.test(t)) return { tipo: 'buscar_clinica', texto: mensaje.trim().replace(/^(mejor )?(en|por) /i, '') }
       return { tipo: 'no_entendido' }
     }
 

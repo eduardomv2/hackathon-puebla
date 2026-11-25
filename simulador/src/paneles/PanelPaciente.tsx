@@ -21,6 +21,8 @@ type Props = {
   telefono?: string
   /** Demo: deja un mensaje escrito en el chat del teléfono simulado */
   escribirEnWhatsApp?: (texto: string) => void
+  /** Sitio: avisa qué celular se escribió (para mostrar su WhatsApp simulado con el código) */
+  alCambiarCelular?: (telefono: string) => void
 }
 
 /** "866 123 4567" → "528661234567" (México: 10 dígitos + 52) */
@@ -29,7 +31,7 @@ const aTelefono = (texto: string) => {
   return d.length === 10 ? `52${d}` : d
 }
 
-export function PanelPaciente({ cliente, telefono: telefonoDemo, escribirEnWhatsApp }: Props) {
+export function PanelPaciente({ cliente, telefono: telefonoDemo, escribirEnWhatsApp, alCambiarCelular }: Props) {
   const [celular, setCelular] = useState('')
   const telefono = telefonoDemo ?? aTelefono(celular)
   const av = useAvisos()
@@ -43,6 +45,9 @@ export function PanelPaciente({ cliente, telefono: telefonoDemo, escribirEnWhats
   const [aceptaAvisos, setAceptaAvisos] = useState(true)
   const [enVivo, setEnVivo] = useState('')
   const ctxRef = useRef<Contexto | null>(null)
+  // El celular escrito o, con sesión, el de la cuenta
+  const celularActual = /^\d{12,15}$/.test(telefono) ? telefono : (ctx?.paciente?.telefono ?? '').replace(/\D/g, '')
+  useEffect(() => { alCambiarCelular?.(celularActual) }, [celularActual]) // eslint-disable-line
   ctxRef.current = ctx
 
   const entrar = useCallback((c: 'web' | 'app') => av.accion(async () => {
@@ -106,7 +111,7 @@ export function PanelPaciente({ cliente, telefono: telefonoDemo, escribirEnWhats
               <Seccion titulo="Catálogo (libre, sin cuenta)">
                 {estudios.map((e) => <div key={e.id} className="cita">{e.nombre} <span className="tenue">desde {dinero(e.precio_base)}</span></div>)}
               </Seccion>
-              <Seccion titulo="Regístrate para agendar" extra={<span className="tenue">números de prueba: código 123456</span>}>
+              <Seccion titulo="Regístrate para agendar" extra={<span className="tenue">el código llega por WhatsApp</span>}>
                 <CamposNombre datos={registro} cambiar={setRegistro} />
                 <div className="fila">
                   {telefonoDemo

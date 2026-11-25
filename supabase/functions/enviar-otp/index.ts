@@ -6,7 +6,7 @@
 // El código se envía al teléfono REGISTRADO del paciente (lo decide api.solicitar_otp)
 // y nunca llega al navegador del asesor: ni el código ni el teléfono completo.
 import { clienteServicio, clienteUsuario, ErrorApi, rpc } from '../_shared/supabase.ts'
-import { enviarAlPaciente } from '../_shared/enviar.ts'
+import { enviarCodigo } from '../_shared/enviar.ts'
 import { cors, json, respuestaDeError } from '../_shared/http.ts'
 
 const ROLES_PERSONAL = ['asesor', 'recepcion', 'supervisor', 'admin']
@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     // 3. Generar el código (solo service_role) y enviarlo al teléfono registrado
     const otp = await rpc<{ codigo: string; expira_en: string; telefono: string; telefono_enmascarado: string }>(
       clienteServicio(), 'solicitar_otp', { p_interaccion_id: interaccion_id })
-    await enviarAlPaciente(otp.telefono, 'otp',
+    await enviarCodigo(otp.telefono, otp.codigo,
       `Salud Digna: tu código de verificación es ${otp.codigo}. Vence en 5 minutos. ` +
       'Díselo solo al asesor que te está atendiendo.')
 

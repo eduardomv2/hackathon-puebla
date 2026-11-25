@@ -37,14 +37,21 @@ supabase/
     20261125001957_recepcion_clinica.sql     rol recepcion, INE en mostrador, llegada con turno por área, en_clinica
     20261125003528_bandeja_atencion.sql      bandeja de supervisión, búsqueda de pacientes, evento verificacion_bloqueada
     20261125014248_limite_mensajes_y_demo.sql  10 mensajes de WhatsApp por minuto, simulador.adelantar_cita
+    20261125045534_directorio_clinicas.sql   teléfono, coordenadas y horario de cada clínica; búsqueda y cercanía
+    20261125052220_codigo_auth_whatsapp.sql  Send SMS Hook: el código del celular va por WhatsApp
+    20261125053539_codigo_respaldo_sms.sql   si WhatsApp no lo entrega, el mismo código por SMS
+    20261125063632_codigo_auth_sesion_reciente.sql  al pedir código, solo esa sesión queda esperando el número
   functions/                                Edge Functions (Deno)
     whatsapp-webhook/                       webhook de WhatsApp Cloud API + agente guiado (interpretar.ts, fechas.ts)
     enviar-otp/                             el asesor pide un OTP; el código va al teléfono del paciente
     pagos-webhook/                          aviso del proveedor de pagos → api.confirmar_pago
     avisos-whatsapp/                        worker: entrega a WhatsApp lo que pasa en otros canales
     procesar-resumenes/                     worker: resumen del trámite para el asesor (Claude o plantilla)
+    enviar-codigo-auth/                     entrega el código de verificación de Auth (hook): WhatsApp y, si falla, SMS
     _shared/                                clientes de Supabase, envío al paciente, HTTP
-  seed.sql                                  ⚠️ solo local: catálogo de ejemplo, horarios, llave, simulador encendido
+  seeds/clinicasData.ts                     directorio de las 261 clínicas (el mismo que usa la interfaz)
+  seeds/clinicas.sql                        GENERADO (npm run clinicas en simulador/): clínicas + horarios de atención
+  seed.sql                                  ⚠️ solo local: estudios de ejemplo, precios, llave, simulador encendido
   tests/
     helpers.psql                            utilidades compartidas de las pruebas
     database/*.sql                          pruebas pgTAP (npx supabase test db)
@@ -82,9 +89,9 @@ solo para el simulador local (ver [Simulador](#esquema-simulador-solo-pruebas)).
    - El esquema `simulador` llega con las migraciones pero queda **apagado** (sus funciones
      responden 42501). Se puede borrar completo:
      `drop schema simulador cascade; select cron.unschedule('sd-simulador-limpieza');`
-   - Cargar el catálogo real (`core.clinicas`, `core.estudios`, `core.clinica_estudios`) y los
-     **horarios de atención** (`core.horarios_clinica`; festivos en `core.dias_inhabiles`).
-     Sin horarios, una clínica no ofrece horarios ni acepta reservas.
+   - Cargar el catálogo real (`core.estudios`, `core.clinica_estudios`) y los festivos (`core.dias_inhabiles`).
+     Las clínicas y sus **horarios de atención** se pueden cargar con `supabase/seeds/clinicas.sql`
+     (no trae nada ficticio ni enciende nada). Sin horarios, una clínica no ofrece horarios ni acepta reservas.
 3. Guardar los secretos que usa el despachador de workers (SQL Editor):
    ```sql
    select vault.create_secret('https://<ref>.supabase.co', 'project_url');
@@ -93,10 +100,13 @@ solo para el simulador local (ver [Simulador](#esquema-simulador-solo-pruebas)).
 4. Dashboard → Settings → Data API → **Exposed schemas**: dejar solo `api` (nunca `simulador`).
 5. Dashboard → Authentication:
    - Activar **Anonymous sign-ins** (la web empieza sin cuenta).
-   - Activar el proveedor **Phone** (OTP por SMS o WhatsApp vía Twilio) con
-     **Confirm phone activado**. Es obligatorio: si está apagado, Auth marca un teléfono nuevo
+   - Activar el proveedor **Phone** con **Confirm phone activado** (no hace falta Twilio ni
+     ningún proveedor de SMS: el código lo manda el hook del punto siguiente). Es obligatorio: si está apagado, Auth marca un teléfono nuevo
      como confirmado sin OTP, y como `core.vincular_identidades_auth` confía en
      `phone_confirmed_at`, cualquier sesión web podría apropiarse del historial de otro paciente.
+   - **Hooks → Send SMS → Postgres**: esquema `hooks`, función `enviar_codigo_auth`. Así el código
+     del celular llega por WhatsApp (ver "Código de verificación por WhatsApp"). Revisar en
+     Rate Limits el máximo de mensajes por hora (es para todo el proyecto).
 6. Dar de alta al personal: crear el usuario en Auth e insertarlo en `core.staff`;
    un trigger copia su rol al JWT (`app_metadata.rol`).
 7. Edge Functions: `supabase functions deploy` y sus secretos
@@ -107,9 +117,43 @@ solo para el simulador local (ver [Simulador](#esquema-simulador-solo-pruebas)).
    | `WHATSAPP_APP_SECRET` | whatsapp-webhook | Verificar la firma `X-Hub-Signature-256` de Meta |
    | `WHATSAPP_VERIFY_TOKEN` | whatsapp-webhook | Verificación GET al registrar el webhook en Meta |
    | `PAGOS_WEBHOOK_SECRET` | pagos-webhook | Verificar el header `x-firma` (HMAC-SHA256 del cuerpo) |
+   | `WHATSAPP_TOKEN` | todas las que envían | Token de acceso de WhatsApp Cloud API (usuario del sistema de Meta Business) |
+   | `WHATSAPP_PHONE_NUMBER_ID` | todas las que envían | Id del número que envía (en Meta → WhatsApp → API Setup) |
+   | `WHATSAPP_PLANTILLA_OTP` | enviar-codigo-auth, enviar-otp | Nombre de la plantilla de **Autenticación** aprobada (botón "Copiar código") |
+   | `WHATSAPP_IDIOMA` | enviar-codigo-auth, enviar-otp | Idioma de esa plantilla (por omisión `es_MX`) |
+   | `CANAL_CODIGO` | enviar-codigo-auth, enviar-otp | `whatsapp_y_sms` (por omisión), `whatsapp` o `sms` |
+   | `VONAGE_API_KEY`, `VONAGE_API_SECRET`, `VONAGE_REMITENTE` | enviar-codigo-auth, enviar-otp, whatsapp-webhook | SMS de respaldo del código (Vonage; remitente = número o nombre que envía) |
 
-   Sin su secreto, cada webhook responde 401 (salvo en `MODO_SIMULADOR`). El envío real por
-   WhatsApp/SMS está pendiente (`_shared/enviar.ts`): fuera del simulador falla de forma explícita.
+   Sin su secreto, cada webhook responde 401 (salvo en `MODO_SIMULADOR`). Sin `WHATSAPP_TOKEN` y
+   `WHATSAPP_PHONE_NUMBER_ID`, enviar falla de forma explícita (un código no enviado no parece enviado).
+
+### Código de verificación por WhatsApp
+
+La web/app verifica el celular con Supabase Auth (`updateUser({ phone })` o `signInWithOtp({ phone })`).
+Auth genera el código y, en vez de mandarlo por SMS, llama al **Send SMS Hook**
+`hooks.enviar_codigo_auth` (función de Postgres, solo la ejecuta Auth). Esta revisa el límite
+(5 códigos por teléfono cada 10 minutos → 429) y pide a la Edge Function `enviar-codigo-auth`
+(por `pg_net`, con `project_url` y `worker_token` de Vault, igual que los workers) que lo entregue:
+
+**WhatsApp y, si falla, SMS** (`CANAL_CODIGO=whatsapp_y_sms`, el de omisión):
+- Si el envío por WhatsApp da error (token, plantilla, número inválido), el código sale por SMS al momento.
+- Si el número no tiene WhatsApp, Meta acepta el envío y avisa segundos después por el webhook
+  (`statuses: failed`). Para mandar entonces el **mismo** código por SMS, se guarda mientras tanto en
+  `core.codigos_enviados`: cifrado, máximo 10 minutos, de un solo uso (se borra al llegar "entregado" o
+  "fallido") y solo para service_role (`api.registrar_codigo_enviado`, `api.resolver_codigo_enviado`).
+- El SMS se manda con Vonage (sin Twilio). En el simulador llega a la bandeja como "Código (SMS)".
+- El código que pide el asesor (`enviar-otp`) usa el mismo camino.
+- Si la paciente recarga la página mientras espera el código, queda otra sesión anónima esperando el mismo
+  número y Auth verificaría contra la vieja ("token has expired or is invalid"). El hook se lo quita a las
+  demás sesiones: siempre gana la que pidió el código al último.
+
+- **Local** (`MODO_SIMULADOR=true`): llega al WhatsApp simulado del simulador, **con cualquier número**.
+  Los números `528661234567`–`528661234571` siguen con código fijo `123456` (los usan los escenarios de `/demo`).
+- **Producción**: WhatsApp Cloud API de Meta, con la plantilla de autenticación. Para probar sin esperar
+  aprobaciones, Meta da un número de prueba que puede enviar a hasta 5 teléfonos registrados en la app;
+  para el público hay que registrar un número propio y que Meta apruebe la plantilla (puede tardar días).
+  El resto de los mensajes (bot, links, avisos) se envían como texto: Meta solo los entrega dentro de
+  las 24 h desde el último mensaje del paciente.
 
 ## Desarrollo local
 
@@ -143,8 +187,9 @@ npx supabase stop         # apaga (conserva los datos)
 - **Fedora / SELinux**: si una función responde `BOOT_ERROR` ("failed to determine entrypoint"),
   el contenedor no puede leer la carpeta. Reetiquetarla una vez:
   `chcon -R -t container_file_t supabase/functions` (se revierte con `-t unlabeled_t`).
-- **OTP por teléfono en local**: `config.toml` usa un proveedor Twilio ficticio y números de prueba
-  (`[auth.sms.test_otp]`: 528661234567 a 528661234571, código `123456`); nunca hagas `config push`.
+- **OTP por teléfono en local**: sin proveedor de SMS. El hook `[auth.hook.send_sms]` de `config.toml`
+  manda el código al WhatsApp simulado (necesita `npx supabase functions serve` corriendo). Los números de
+  `[auth.sms.test_otp]` (528661234567 a 528661234571) usan siempre `123456`. Nunca hagas `config push`.
 
 ## Pruebas
 
@@ -173,8 +218,12 @@ Los roles se simulan igual que PostgREST: `set local role` más `request.jwt.cla
 | `090_rate_limit_telefono` | Edge Functions: 300 por minuto por teléfono con `x-sd-telefono` (red de seguridad); sin header, exentas; GET → PT405 |
 | `100_otp_destino` | El OTP va al teléfono verificado, no al que llama; solo service_role lo pide |
 | `110_catalogo` | Catálogo público, búsqueda sin acentos, inactivos ocultos, rate limit de anon |
-| `120_horarios` | Domingo y festivos sin horarios, horario lleno oculto, 3:00 y 9:10 rechazados, zona horaria |
+| `120_horarios` | Horario real (domingo 6:30–14:00, lunes 6:00–19:00), clínica cerrada en domingo, festivos sin horarios, horario lleno oculto, 3:00 y 9:10 rechazados, zona horaria |
 | `130_simulador` | Apagado por defecto (42501), encendido funciona, limpieza a la hora |
+| `220_codigo_auth_sesion_reciente` | Dos sesiones esperan el mismo número: al pedir código, la vieja lo pierde (y su token), la nueva lo conserva, otros números no se tocan |
+| `210_codigo_respaldo_sms` | Código guardado cifrado y por 10 min, si falló se devuelve una sola vez, entregado o vencido no se reenvía, 22023 con teléfono inválido, ni anon ni usuarios lo leen |
+| `200_codigo_auth_whatsapp` | Solo Auth ejecuta el hook, responde `{}` y encola la llamada a `enviar-codigo-auth` con el worker_token, 400 sin código, usa `new_phone` si falta `sms.phone`, 429 al sexto código en 10 min |
+| `190_directorio_clinicas` | 261 clínicas con id del directorio, zona horaria por estado/ciudad, horario leído del texto (sin domingo = cerrado), directorio para anon, búsqueda por varias palabras y en la dirección, cercanía con distancia, 22023 sin lng, 32 estados con sus ciudades |
 | `180_limite_mensajes_y_demo` | WhatsApp: el mensaje 11 del minuto recibe PT429, las respuestas no cuentan, cada teléfono su cupo; `adelantar_cita` solo para teléfonos de prueba; reiniciar limpia contadores |
 | `170_bandeja_atencion` | Conteos de las 5 categorías, sin categoría no lista, detalle por categoría, cursor, máximo 50, filtros de canal y fechas, alcance por clínica, asesor sin acceso, búsqueda por folio/celular/nombre, mínimo 3 caracteres |
 | `160_recepcion` | Rol con clínica obligatoria, solo canal clínica y solo su clínica, INE verifica la sesión, PT423 con plantilla de clínica, llegada: turno U-001/U-002, caja, preparación en el evento, pagar en caja sigue en clínica, solo citas de hoy |
@@ -210,7 +259,7 @@ Cada app usa la clave **publicable** de Supabase y el JWT de quien la usa; la cl
 
 | Rol | Cómo entra | Canal | Qué ve y qué hace | Funciones principales |
 |---|---|---|---|---|
-| **Paciente** (web/app) | Supabase Auth: sesión anónima para ver catálogo; para agendar, OTP de su celular (`updateUser({ phone })` + `verifyOtp(type: 'phone_change')`, o `signInWithOtp` si el número ya tiene cuenta) | `web`, `app` | Catálogo, precios y horarios libres. Con el celular verificado: registro (nombre + apellido), sus trámites (varios, con folio y etiqueta), familiares, citas, pago, aviso por WhatsApp (casilla de consentimiento) | `iniciar_sesion_paciente`, `guardar_datos_paciente`, `registrar_consentimiento_avisos`, `iniciar_tramite`, `retomar_tramite`, `avanzar_tramite`, `reservar_cita`, `generar_pago`, `agregar_beneficiario`, `mis_beneficiarios`, `catalogo_estudios`, `clinicas_para_estudio`, `horarios_disponibles` |
+| **Paciente** (web/app) | Supabase Auth: sesión anónima para ver catálogo; para agendar, OTP de su celular (`updateUser({ phone })` + `verifyOtp(type: 'phone_change')`, o `signInWithOtp` si el número ya tiene cuenta) | `web`, `app` | Catálogo, precios y horarios libres. Con el celular verificado: registro (nombre + apellido), sus trámites (varios, con folio y etiqueta), familiares, citas, pago, aviso por WhatsApp (casilla de consentimiento) | `iniciar_sesion_paciente`, `guardar_datos_paciente`, `registrar_consentimiento_avisos`, `iniciar_tramite`, `retomar_tramite`, `avanzar_tramite`, `reservar_cita`, `generar_pago`, `agregar_beneficiario`, `mis_beneficiarios`, `catalogo_estudios`, `clinicas_para_estudio`, `ubicaciones_clinicas`, `directorio_clinicas`, `horarios_disponibles` |
 | **WhatsApp (bot)** | Edge Function `whatsapp-webhook` (clave secreta + `x-sd-telefono`) | `whatsapp` | El número ya está probado (nivel `canal`). Pide el nombre si falta, ofrece "Tienes pendiente", fechas por menú | `iniciar_contacto('whatsapp', tel, 'ia', 'canal')` y las mismas del paciente |
 | **Asesor** (`asesor`) | Correo y contraseña; el JWT trae `app_metadata.rol` | `call_center` | Busca por teléfono (sesión `declarada`), verifica con OTP (`enviar-otp` → `validar_otp`), ve resumen, línea de tiempo y WhatsApp en vivo, captura el registro, toma trámites (los bloquea para otros canales), agenda y genera el pago. Cuelga con `cerrar_interaccion` | `iniciar_contacto`, `obtener_contexto`, `validar_otp`, `verificar_identidad`, `retomar_tramite`, y las del trámite |
 | **Recepción** (`recepcion`, siempre con `app_metadata.clinica_id`) | Correo y contraseña | `clinica` | Solo su clínica. **Mostrador:** busca por celular, "Verificar INE" (`verificar_presencial` con `p_interaccion_id`) y opera como el asesor (agenda también para hoy). **Llegadas:** agenda del día → `registrar_llegada` (identificación de quien recibe el estudio, preparación, turno, caja o área) | `iniciar_contacto('clinica', …)`, `verificar_presencial`, `agenda_clinica`, `registrar_llegada`, `horarios_disponibles(p_inmediato => true)` |
@@ -298,7 +347,9 @@ transacción, para que el evento `limite_citas_alcanzado` quede guardado como se
 | `api.agenda_clinica` | — | Muestra a quien se atiende (beneficiario) y quién agendó |
 | `api.metricas(desde, hasta, clinica)` | Supervisor/admin | Cualquier rango, comparado con el mismo periodo del año anterior (`actual`, `anio_anterior`, `variacion_pct`) |
 | `api.catalogo_estudios(busqueda, categoria)` | Público (anon incluido) | Estudios activos con preparación y precio base; búsqueda sin acentos ni mayúsculas. Máx. 50 |
-| `api.clinicas_para_estudio(estudio, ciudad, estado)` | Público | Clínicas activas que ofrecen el estudio, con precio y dirección. Máx. 50 |
+| `api.clinicas_para_estudio(estudio, ciudad, estado, busqueda, lat, lng, limite)` | Público | Clínicas activas que ofrecen el estudio, con precio, dirección, teléfono, `lat`/`lng`, `horario` (texto publicado), `id_externo` (id de `clinicasData.ts`) y `slug`. `busqueda`: cada palabra en nombre, ciudad, estado o dirección, sin acentos. Con `lat`+`lng` ordena por cercanía y agrega `distancia_km` (solo una: 22023 `coordenadas_invalidas`). `limite` 1–300, por omisión 50 |
+| `api.directorio_clinicas(busqueda, estado, ciudad, lat, lng, limite)` | Público | Todas las clínicas activas (por omisión hasta 300: el directorio completo), mismos campos sin precio. Para el mapa / directorio de la interfaz |
+| `api.ubicaciones_clinicas(estudio)` | Público | `[{estado, clinicas, ciudades: [{ciudad, clinicas}]}]`: para elegir primero estado y ciudad. Con estudio, solo donde se hace |
 | `api.horarios_disponibles(clinica, estudio, desde, dias)` | Público | Horarios con cupo en la zona horaria de la clínica (1 a 14 días, máx. 100), con al menos 1 h de anticipación |
 | `api.solicitar_otp(interaccion)` | Solo service_role | Envía al teléfono **registrado** de mayor confianza (no al que llama). Devuelve `codigo`, `telefono` y `telefono_enmascarado`; al asesor solo le llega lo enmascarado (Edge Function `enviar-otp`) |
 | `api.reservar_cita` (horario) | — | Rechaza horas fuera de atención, no alineadas al intervalo o en día inhábil: 22023 `horario_fuera_de_atencion` |
@@ -344,10 +395,22 @@ La paciente no tiene que "pasarse" de canal: el mismo número es el mismo pacien
   - Call center / recepción: el personal lo captura (tras validar el OTP).
   - Pacientes anteriores sin nombre: las listas del personal los muestran como `Paciente +52******4567`
     (`paciente.nombre_mostrar` en el contexto).
+- **Clínicas: primero dónde, luego cuál.** Son 261 sucursales reales (`supabase/seeds/clinicasData.ts`).
+  Para actualizarlas: reemplazar ese archivo, `npm run clinicas` (en `simulador/`) y `npx supabase db reset`.
+  - Claves: el slug de cada sucursal (`puebla-capu`, `tijuana-centro`…). Tres conservan su clave de siempre
+    porque las usan pruebas, demo y usuarios de prueba: `PUE-CEN` = Puebla (Av. 2 Pte., Centro),
+    `PUE-ANG` = Puebla Angelopolis, `MTY-CEN` = Monterrey (Centro).
+  - Turnos de cita = horario publicado de cada sucursal (domingo incluido si abre); sin horario publicado,
+    lunes a viernes 7:00–15:00 y sábado 7:00–12:00. Zona horaria por estado (Tijuana, Hermosillo, Mazatlán,
+    Chihuahua, Cancún…) y las fronterizas con la suya (Ciudad Juárez, Matamoros, Reynosa, Nuevo Laredo).
+  - Web/app: estado y ciudad (`ubicaciones_clinicas`) o "📍 Cerca de mí" (las 10 más cercanas).
+  - WhatsApp: "¿En qué ciudad o municipio quieres tu cita?" → lista numerada de ese lugar (máx. 12; si son más,
+    pide alcaldía o colonia; "Puebla" muestra las de la ciudad). Entiende cdmx, edomex, gdl, mty… y
+    "mejor en Cholula" para cambiar de lugar.
 - **WhatsApp: elegir fecha por menú.** Tras la clínica, el bot pregunta "¿Qué día te gustaría?" y entiende
   hoy, mañana, pasado mañana, lunes…domingo (= el próximo; si hoy es jueves, "jueves" es el de la semana
   que entra), "26 de noviembre", "26 nov", "26/11". Responde con el menú del día
-  ("Horarios del jueves 26 de noviembre en Puebla Centro:"): horas libres numeradas
+  ("Horarios del jueves 26 de noviembre en Puebla Capu:"): horas libres numeradas
   (`api.horarios_disponibles`), separadas en mañana y tarde, máximo 10 y "Ver más"; se elige con el número.
   - Día sin lugar o clínica cerrada: "Ese día no hay horarios; el próximo con lugar es el viernes 27…" y su menú.
   - Día y hora juntos ("jueves 7am", "mañana a las 10"): si está libre pide confirmación (sí/no); si no,
@@ -426,7 +489,7 @@ http://localhost:5173 (necesita `npx supabase start`, `npx supabase functions se
 
 | Ruta | Qué es |
 |---|---|
-| `/` | Sitio del paciente (web/app): catálogo, registro con OTP (números de prueba 866 123 4567 a 4571, código 123456), trámites, citas. En el pie, la liga discreta **Acceso personal** |
+| `/` | Sitio del paciente (web/app): catálogo, registro con OTP de cualquier celular (el código aparece en el WhatsApp simulado que se abre al lado; 866 123 4567 a 4571: código fijo 123456), trámites, citas. En el pie, la liga discreta **Acceso personal** |
 | `/personal` | Consola del personal. Se carga solo al entrar (lazy), con su propia sesión (`storageKey` `sd-personal`) y cierre automático tras 30 min sin actividad. El rol decide las pestañas: asesor → Call center; recepción → Recepción; supervisor → Supervisión; admin → las tres |
 | `/demo` | Los 4 canales lado a lado (paciente, teléfono simulado, personal, supervisión siempre visible) y los escenarios para el jurado |
 

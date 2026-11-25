@@ -1,7 +1,7 @@
 -- Horarios de atención, días inhábiles y horarios disponibles.
 create extension if not exists pgtap with schema extensions;
 begin;
-select plan(9);
+select plan(10);
 \ir ../helpers.psql
 
 -- El próximo domingo (a partir de mañana) y los días siguientes, en hora de México
@@ -9,12 +9,15 @@ select d as domingo, d + 1 as lunes, d + 2 as martes
 from (select m + ((7 - extract(dow from m)::int) % 7) as d
       from (select (now() at time zone 'America/Mexico_City')::date + 1 as m) x) y \gset
 
+-- Horario real de Puebla (PUE-CEN): lunes a viernes 6:00 a 19:00, domingo 6:30 a 14:00
 select tests.como_anon();
-select is(jsonb_array_length(api.horarios_disponibles(tests.clinica('PUE-CEN'), tests.estudio('BH'), :'domingo', 1)), 0,
-          'El domingo no ofrece horarios');
+select api.horarios_disponibles(tests.clinica('PUE-CEN'), tests.estudio('BH'), :'domingo', 1) as dom \gset
+select is(jsonb_array_length((:'dom')::jsonb), 15, 'El domingo, de 6:30 a 14:00 cada 30 min: 15 horarios');
+select is(jsonb_array_length(api.horarios_disponibles(tests.clinica('gran-terraza-coapa-tlalpan'), tests.estudio('BH'), :'domingo', 1)), 0,
+          'Una clínica que no abre en domingo no ofrece horarios');
 select api.horarios_disponibles(tests.clinica('PUE-CEN'), tests.estudio('BH'), :'lunes', 1) as lun \gset
-select is(jsonb_array_length((:'lun')::jsonb), 16, 'El lunes, de 7:00 a 15:00 cada 30 min: 16 horarios');
-select is((:'lun')::jsonb -> 0 ->> 'hora', '07:00', 'empezando a las 7:00');
+select is(jsonb_array_length((:'lun')::jsonb), 26, 'El lunes, de 6:00 a 19:00 cada 30 min: 26 horarios');
+select is((:'lun')::jsonb -> 0 ->> 'hora', '06:00', 'empezando a las 6:00');
 
 -- Día inhábil para todas las clínicas
 select tests.como_postgres();
@@ -61,9 +64,9 @@ select tests.como_postgres();
 update core.clinicas set zona_horaria = 'America/Tijuana' where clave = 'MTY-CEN';
 select tests.como_anon();
 select api.horarios_disponibles(tests.clinica('MTY-CEN'), tests.estudio('BH'), :'martes', 1) -> 0 as tj \gset
-select is((:'tj')::jsonb ->> 'hora', '07:00', 'La primera hora es 7:00 local de la clínica');
-select is(((:'tj')::jsonb ->> 'fecha_hora')::timestamptz, (:'martes'::date + time '07:00') at time zone 'America/Tijuana',
-          'que corresponde a las 7:00 de Tijuana, no de la Ciudad de México');
+select is((:'tj')::jsonb ->> 'hora', '06:00', 'La primera hora es 6:00 local de la clínica');
+select is(((:'tj')::jsonb ->> 'fecha_hora')::timestamptz, (:'martes'::date + time '06:00') at time zone 'America/Tijuana',
+          'que corresponde a las 6:00 de Tijuana, no de Monterrey');
 
 select finish();
 rollback;

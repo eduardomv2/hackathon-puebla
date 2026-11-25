@@ -5,7 +5,9 @@ import { useEffect, useState } from 'react'
 import {
   agregarBeneficiario, avanzarTramite, catalogoEstudios, clinicasParaEstudio, generarPago, horariosDisponibles,
   iniciarTramite, misBeneficiarios, obtenerContexto, pagarSimulado, referenciaDeLink, reservarCita, retomarTramite,
+  ubicacionesClinicas,
   type Beneficiario, type Cliente, type Clinica, type Contexto, type Estudio, type Horario, type Pago, type Relacion,
+  type Ubicacion,
 } from '../api'
 import { dia, dinero, fechaHora, RELACION, type Avisador } from './comunes'
 
@@ -233,17 +235,58 @@ function FormFamiliar({ cliente, int, av, alListo, alCancelar }: {
 function PasoClinica({ cliente, ctx, av, hacer }: PasoProps) {
   const int = ctx.sesion.interaccion_id
   const t = ctx.tramite_activo!
+  const estudio = t.contexto.estudio_id!
+  const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([])
+  const [estado, setEstado] = useState('')
+  const [ciudad, setCiudad] = useState('')
+  const [cerca, setCerca] = useState<{ lat: number; lng: number } | null>(null)
   const [clinicas, setClinicas] = useState<Clinica[]>([])
-  useEffect(() => { void av.accion(async () => setClinicas(await clinicasParaEstudio(cliente, t.contexto.estudio_id!))) }, [cliente, t.contexto.estudio_id]) // eslint-disable-line
+
+  // Primero dónde (estado y ciudad; Puebla de inicio) y luego cuál
+  useEffect(() => {
+    void av.accion(async () => {
+      const u = await ubicacionesClinicas(cliente, estudio)
+      setUbicaciones(u)
+      const e = u.find((x) => x.estado === 'Puebla') ?? u[0]
+      setEstado(e?.estado ?? '')
+      setCiudad(e?.ciudades.find((c) => c.ciudad === 'Puebla')?.ciudad ?? '')
+    })
+  }, [cliente, estudio]) // eslint-disable-line
+  useEffect(() => {
+    if (!estado && !cerca) return
+    void av.accion(async () => setClinicas(await clinicasParaEstudio(cliente, estudio,
+      cerca ? { ...cerca, limite: 10 } : { estado, ciudad })))
+  }, [cliente, estudio, estado, ciudad, cerca]) // eslint-disable-line
+
+  const ubicarme = () => {
+    if (!navigator.geolocation) return av.info('Este navegador no comparte la ubicación.')
+    navigator.geolocation.getCurrentPosition(
+      (p) => setCerca({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => av.info('No se pudo obtener tu ubicación. Elige estado y ciudad.'),
+      { timeout: 10000 })
+  }
+  const ciudades = ubicaciones.find((u) => u.estado === estado)?.ciudades ?? []
+
   return (
     <div className="paso">
       <h4>{t.estudio?.nombre} {t.beneficiario && t.beneficiario.relacion !== 'titular' && <span className="tenue">para {t.beneficiario.nombre}</span>}</h4>
       {t.estudio?.preparacion && <p className="tenue">Preparación: {t.estudio.preparacion}</p>}
       <h4>¿En qué clínica?</h4>
+      <div className="fila">
+        <select value={estado} onChange={(e) => { setCerca(null); setEstado(e.target.value); setCiudad('') }}>
+          {ubicaciones.map((u) => <option key={u.estado} value={u.estado}>{u.estado} ({u.clinicas})</option>)}
+        </select>
+        <select value={ciudad} onChange={(e) => { setCerca(null); setCiudad(e.target.value) }}>
+          <option value="">Todas las ciudades</option>
+          {ciudades.map((c) => <option key={c.ciudad} value={c.ciudad}>{c.ciudad} ({c.clinicas})</option>)}
+        </select>
+        <button className="secundario chico" disabled={av.ocupado} onClick={ubicarme}>📍 Cerca de mí</button>
+      </div>
+      {cerca && <p className="tenue">Las 10 más cercanas a tu ubicación.</p>}
       {clinicas.map((c) => (
-        <button key={c.id} className="opcion-boton" disabled={av.ocupado}
+        <button key={c.id} className="opcion-boton" disabled={av.ocupado} title={[c.direccion, c.telefono, c.horario].filter(Boolean).join('\n')}
           onClick={() => hacer(() => avanzarTramite(cliente, int, t, 'seleccion_horario', { clinica_id: c.id }))}>
-          {c.nombre} <span className="tenue">· {c.ciudad} · {dinero(c.precio)}</span>
+          {c.nombre} <span className="tenue">· {c.ciudad}{c.distancia_km != null && ` · ${c.distancia_km} km`} · {dinero(c.precio)}</span>
         </button>
       ))}
       <button className="secundario" disabled={av.ocupado} onClick={() => hacer(() => avanzarTramite(cliente, int, t, 'seleccion_estudio'))}>← Cambiar estudio</button>

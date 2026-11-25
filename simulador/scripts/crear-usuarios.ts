@@ -21,8 +21,8 @@ const CONTRASENA = 'demo1234' // Auth exige al menos 6 caracteres
 
 const PERSONAL = [
   { email: 'asesor@demo.mx', nombre: 'Asesora Demo (call center)', rol: 'asesor', clinica: null },
-  { email: 'clinica@demo.mx', nombre: 'Supervisora Demo (Clínica Puebla Centro)', rol: 'supervisor', clinica: 'PUE-CEN' },
-  { email: 'recepcion@demo.mx', nombre: 'Recepción Demo (Clínica Puebla Centro)', rol: 'recepcion', clinica: 'PUE-CEN' },
+  { email: 'clinica@demo.mx', nombre: 'Supervisora Demo (Puebla centro, PUE-CEN)', rol: 'supervisor', clinica: 'PUE-CEN' },
+  { email: 'recepcion@demo.mx', nombre: 'Recepción Demo (Puebla centro, PUE-CEN)', rol: 'recepcion', clinica: 'PUE-CEN' },
   { email: 'admin@demo.mx', nombre: 'Admin Demo', rol: 'admin', clinica: null },
 ] as const
 

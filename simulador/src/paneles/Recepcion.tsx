@@ -6,8 +6,8 @@
 // El trámite que recepción atiende queda bloqueado para los demás canales (el personal manda).
 import { useEffect, useState } from 'react'
 import {
-  agendaClinica, catalogoEstudios, clinicasParaEstudio, registrarLlegada, TIPOS_DOCUMENTO,
-  type CitaAgenda, type Cliente, type Llegada, type TipoDocumento,
+  agendaClinica, directorioClinicas, registrarLlegada, TIPOS_DOCUMENTO,
+  type CitaAgenda, type Cliente, type Clinica, type Llegada, type TipoDocumento,
 } from '../api'
 import { dinero, hora, hoyLocal, Seccion, type Avisador } from '../ui/comunes'
 import { Atencion } from './PanelAsesor'
@@ -30,7 +30,7 @@ export function Recepcion({ cliente, telefono, av, clinicaFija }: {
 }
 
 function Llegadas({ cliente, av, clinicaFija }: { cliente: Cliente; av: Avisador; clinicaFija: string | null }) {
-  const [clinicas, setClinicas] = useState<{ id: string; nombre: string }[]>([])
+  const [clinicas, setClinicas] = useState<Clinica[]>([])
   const [clinica, setClinica] = useState(clinicaFija ?? '')
   const [fecha, setFecha] = useState(hoyLocal())
   const [agenda, setAgenda] = useState<CitaAgenda[]>([])
@@ -41,13 +41,10 @@ function Llegadas({ cliente, av, clinicaFija }: { cliente: Cliente; av: Avisador
   useEffect(() => {
     if (clinicaFija) return
     void av.accion(async () => {
-      const mapa = new Map<string, string>()
-      for (const e of await catalogoEstudios(cliente)) {
-        for (const c of await clinicasParaEstudio(cliente, e.id)) mapa.set(c.id, c.nombre)
-      }
-      const lista = [...mapa].map(([id, nombre]) => ({ id, nombre }))
+      const lista = (await directorioClinicas(cliente))
+        .sort((a, b) => a.estado.localeCompare(b.estado) || a.nombre.localeCompare(b.nombre))
       setClinicas(lista)
-      if (!clinica && lista[0]) setClinica(lista[0].id)
+      if (!clinica && lista[0]) setClinica((lista.find((c) => c.clave === 'PUE-CEN') ?? lista[0]).id)
     })
   }, [cliente, clinicaFija]) // eslint-disable-line
 
@@ -60,7 +57,11 @@ function Llegadas({ cliente, av, clinicaFija }: { cliente: Cliente; av: Avisador
       <div className="fila">
         {!clinicaFija && (
           <select value={clinica} onChange={(e) => setClinica(e.target.value)}>
-            {clinicas.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            {[...new Set(clinicas.map((c) => c.estado))].map((e) => (
+              <optgroup key={e} label={e}>
+                {clinicas.filter((c) => c.estado === e).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </optgroup>
+            ))}
           </select>
         )}
         <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />

@@ -136,6 +136,9 @@ table.seleccionable tr:hover, tr.sel { background: var(--acento-claro); }
 .sitio { min-height: 100vh; display: flex; flex-direction: column; }
 .sitio-cuerpo { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 12px; }
 .sitio-personal .sitio-cuerpo { max-width: 1100px; }
+.sitio-con-telefono .sitio-cuerpo { max-width: 1200px; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 12px; align-items: start; }
+.sitio-telefono { position: sticky; top: 8px; }
+@media (max-width: 900px) { .sitio-con-telefono .sitio-cuerpo { grid-template-columns: 1fr; } }
 .pie { display: flex; justify-content: space-between; gap: 12px; padding: 10px 16px; border-top: 1px solid #e5e7eb; font-size: 12px; }
 .pie a { color: #6b7280; text-decoration: none; }
 .pie a:hover { text-decoration: underline; }

@@ -76,12 +76,14 @@ export function PanelTelefono({ cliente, telefono, borrador, setBorrador }: Prop
         </div>
       </Seccion>
 
-      <Seccion titulo="Bandeja (SMS, links, avisos)">
+      <Seccion titulo="Bandeja (códigos, links, avisos)">
         {!otros.length && <p className="tenue">Vacía.</p>}
         {otros.map((m) => (
           <div key={m.id} className={`bandeja bandeja-${m.tipo}`}>
             <span className="hora">{hora(m.creado_en)}</span>
-            {m.tipo === 'otp' && <><b>SMS</b> {m.contenido}</>}
+            {m.tipo === 'otp' && (m.contenido.startsWith('[SMS] ')
+              ? <><b>Código (SMS)</b> {m.contenido.slice(6)}</>
+              : <><b>Código (WhatsApp)</b> {m.contenido}</>)}
             {m.tipo === 'sistema' && <><b>Aviso</b> {m.contenido}</>}
             {m.tipo === 'link_pago' && (
               <>

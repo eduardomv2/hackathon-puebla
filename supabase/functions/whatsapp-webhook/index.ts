@@ -4,6 +4,8 @@
 //   POST { "object": "whatsapp_business_account",
 //          "entry": [{ "changes": [{ "value": { "messages": [{ "from": "5218661234567",
 //                      "id": "wamid…", "type": "text", "text": { "body": "hola" } }] } }] }] }
+//   Meta también avisa aquí el estado de lo que enviamos (value.statuses: sent, delivered, read,
+//   failed): si un código de verificación no se entregó por WhatsApp, se manda por SMS.
 //
 // Autenticación:
 //   · Con WHATSAPP_APP_SECRET: X-Hub-Signature-256 = "sha256=" + HMAC-SHA256(cuerpo).
@@ -12,9 +14,11 @@
 // La respuesta incluye lo que contestó el bot (útil para el simulador; Meta la ignora).
 import { modoSimulador } from '../_shared/supabase.ts'
 import { cors, firmaValida, json } from '../_shared/http.ts'
+import { resolverEstadoDeMensaje } from '../_shared/enviar.ts'
 import { atenderMensaje } from './agente.ts'
 
 type MensajeWhatsApp = { from: string; id: string; type: string; text?: { body: string } }
+type EstadoWhatsApp = { id: string; status: string; recipient_id?: string }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -39,11 +43,25 @@ Deno.serve(async (req) => {
     return json({ code: '42501', message: 'Webhook sin WHATSAPP_APP_SECRET configurado' }, 401)
   }
 
-  let datos: { entry?: { changes?: { value?: { messages?: MensajeWhatsApp[] } }[] }[] }
+  let datos: { entry?: { changes?: { value?: { messages?: MensajeWhatsApp[]; statuses?: EstadoWhatsApp[] } }[] }[] }
   try { datos = JSON.parse(cuerpo) } catch { return json({ code: '22023', message: 'JSON inválido' }, 400) }
 
-  const mensajes = (datos.entry ?? []).flatMap((e) => e.changes ?? []).flatMap((c) => c.value?.messages ?? [])
+  const cambios = (datos.entry ?? []).flatMap((e) => e.changes ?? [])
+  const mensajes = cambios.flatMap((c) => c.value?.messages ?? [])
   const resultados = []
+
+  // Estados de lo enviado: un código no entregado se reenvía por SMS
+  const estados = []
+  for (const s of cambios.flatMap((c) => c.value?.statuses ?? [])) {
+    try {
+      const respaldo = await resolverEstadoDeMensaje(s.id, s.status)
+      if (respaldo) estados.push({ id: s.id, status: s.status, respaldo })
+    } catch (e) {
+      console.error('whatsapp-webhook estado', s.id, e)
+      estados.push({ id: s.id, status: s.status, error: e instanceof Error ? e.message : String(e) })
+    }
+  }
+
   for (const m of mensajes) {
     try {
       if (m.type !== 'text' || !m.text?.body?.trim()) {
@@ -58,5 +76,5 @@ Deno.serve(async (req) => {
       resultados.push({ id: m.id, from: m.from, error: e instanceof Error ? e.message : String(e) })
     }
   }
-  return json({ resultados })
+  return json({ resultados, estados })
 })
