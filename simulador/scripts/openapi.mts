@@ -261,6 +261,8 @@ const doc = {
       '- Decide por el campo `code` del error, no por el texto.',
       '- Mande el header `x-sd-telefono` cuando un servicio actúa por un paciente (límite por teléfono).',
       '',
+      '**¿Por qué todo es POST?** Es una decisión de diseño. Cada función de la base se expone como RPC y el verbo no significa «leer» o «escribir», solo «ejecutar». PostgREST corre los GET en una transacción de solo lectura, donde no se puede contar el límite de solicitudes por minuto (`core.verificar_peticion()` escribe un contador); permitirlos dejaría saltarse los límites, así que responden `PT405`. Además casi toda función registra algo (bloqueo de la interacción, eventos, contadores). Lo que se pierde: la semántica REST clásica y la caché HTTP del catálogo, que a esta escala no hace falta; si algún día se requiere, se puede poner una Edge Function con caché delante del catálogo público.',
+      '',
       '**Niveles de verificación:** `declarada` (solo ve que hay un trámite), `canal` (datos enmascarados) y `verificada` (todo).',
       '',
       '**Límites por minuto:** anónimo 30 (IP), paciente 120, personal 600, servicio 300 por teléfono.',
